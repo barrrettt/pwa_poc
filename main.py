@@ -57,9 +57,9 @@ app = FastAPI()
 # Servir archivos estáticos
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Subscriptions file
-SUBSCRIPTIONS_FILE = Path("subscriptions.json")
-HISTORY_FILE = Path("history.json")
+# Data files
+SUBSCRIPTIONS_FILE = Path("data/subscriptions.json")
+HISTORY_FILE = Path("data/history.json")
 
 def load_subscriptions():
     """Load subscriptions from JSON file"""
