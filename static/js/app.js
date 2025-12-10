@@ -670,21 +670,63 @@ async function registerPeriodicSync() {
             } else if (status.state === 'prompt') {
                 diagPeriodicSync.textContent = '⚠️ Pendiente';
                 diagPeriodicSync.className = 'diagnostic-value warning';
+                console.warn('⚠️ Periodic sync permission pending');
+                console.log('💡 Starting frontend heartbeat fallback');
+                startFrontendHeartbeat();
             } else {
                 diagPeriodicSync.textContent = '❌ Denegado';
                 diagPeriodicSync.className = 'diagnostic-value error';
                 console.warn('⚠️ Periodic sync permission denied');
+                console.log('💡 Starting frontend heartbeat fallback');
+                startFrontendHeartbeat();
             }
         } else {
             diagPeriodicSync.textContent = '❌ No soportado';
             diagPeriodicSync.className = 'diagnostic-value error';
             console.warn('⚠️ Periodic Background Sync not supported');
-            console.log('💡 Fallback: Using push notifications for background activity');
+            console.log('💡 Fallback: Starting frontend interval for heartbeat');
+            startFrontendHeartbeat();
         }
     } catch (error) {
         console.error('❌ Error registering periodic sync:', error);
         diagPeriodicSync.textContent = '❌ Error';
         diagPeriodicSync.className = 'diagnostic-value error';
+        // Start fallback on error
+        startFrontendHeartbeat();
+    }
+}
+
+// Fallback: Frontend heartbeat with setInterval (only works when app is open)
+function startFrontendHeartbeat() {
+    console.log('🔄 Starting frontend heartbeat fallback (every 5 minutes)');
+    
+    // Send initial heartbeat
+    sendFrontendHeartbeat();
+    
+    // Set interval for subsequent heartbeats
+    setInterval(sendFrontendHeartbeat, 5 * 60 * 1000); // Every 5 minutes
+}
+
+async function sendFrontendHeartbeat() {
+    try {
+        console.log('💓 Frontend: Sending heartbeat...', deviceFingerprint.substring(0, 16) + '...');
+        
+        const response = await fetch('/api/heartbeat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fingerprint: deviceFingerprint })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Frontend: Heartbeat sent:', data.registered_at);
+        } else {
+            console.error('❌ Frontend: Heartbeat failed:', response.status);
+        }
+    } catch (error) {
+        console.error('❌ Frontend: Error sending heartbeat:', error);
     }
 }
 
