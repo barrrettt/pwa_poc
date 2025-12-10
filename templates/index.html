@@ -28,6 +28,27 @@
             Hello I'm a PWA, install me and test things 😊
         </p>
         
+        <!-- Diagnostic Panel -->
+        <div class="diagnostic-panel" id="diagnosticPanel">
+            <div class="diagnostic-title">🔍 Diagnóstico PWA</div>
+            <div class="diagnostic-item">
+                <span class="diagnostic-label">🔒 HTTPS:</span>
+                <span class="diagnostic-value" id="diagSecure">-</span>
+            </div>
+            <div class="diagnostic-item">
+                <span class="diagnostic-label">📱 Modo:</span>
+                <span class="diagnostic-value" id="diagDisplay">-</span>
+            </div>
+            <div class="diagnostic-item">
+                <span class="diagnostic-label">🔔 Notificaciones:</span>
+                <span class="diagnostic-value" id="diagNotification">-</span>
+            </div>
+            <div class="diagnostic-item">
+                <span class="diagnostic-label">⚙️ Service Worker:</span>
+                <span class="diagnostic-value" id="diagSW">-</span>
+            </div>
+        </div>
+        
         <!-- Row 1: Test Button -->
         <button class="test-button" id="testButton">
             🧪 Test Endpoint

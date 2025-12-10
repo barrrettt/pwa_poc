@@ -329,13 +329,20 @@ async def clear_subscriptions():
 @app.post("/api/send-notification")
 async def send_notification(payload: NotificationPayload):
     """Send push notification to all subscribers"""
+    print("=" * 50)
+    print("📬 Send notification endpoint called")
+    print(f"📊 Total subscriptions: {len(subscriptions)}")
+    
     if not subscriptions:
+        print("⚠️ No subscribers found")
         return {"status": "no_subscribers", "sent": 0}
     
     # Get VAPID keys from environment (as strings from npx web-push)
     vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
     vapid_public_key = os.getenv("VAPID_PUBLIC_KEY")
     vapid_email = os.getenv("VAPID_CLAIM_EMAIL", "mailto:test@example.com")
+    
+    print(f"🔑 VAPID keys configured: {bool(vapid_private_key and vapid_public_key)}")
     
     if not vapid_private_key or not vapid_public_key:
         raise HTTPException(status_code=500, detail="VAPID keys not configured")
@@ -353,11 +360,14 @@ async def send_notification(payload: NotificationPayload):
         "timestamp": int(time.time() * 1000)
     }
     
+    print(f"📦 Notification data: {notification_data}")
+    
     sent_count = 0
     failed_count = 0
     
-    for subscription in subscriptions[:]:  # Copy list to safely modify during iteration
+    for idx, subscription in enumerate(subscriptions[:]):  # Copy list to safely modify during iteration
         try:
+            print(f"📤 Sending to subscription {idx + 1}/{len(subscriptions)}: {subscription.get('device_fingerprint', 'unknown')[:16]}...")
             webpush(
                 subscription_info=subscription,
                 data=json.dumps(notification_data),
@@ -365,16 +375,23 @@ async def send_notification(payload: NotificationPayload):
                 vapid_claims={"sub": vapid_email}
             )
             sent_count += 1
+            print(f"✅ Sent successfully to subscription {idx + 1}")
         except WebPushException as e:
-            print(f"Failed to send notification: {e}")
+            print(f"❌ WebPushException for subscription {idx + 1}: {e}")
+            print(f"   Status code: {e.response.status_code if e.response else 'N/A'}")
+            print(f"   Response text: {e.response.text if e.response else 'N/A'}")
             failed_count += 1
             # Remove invalid subscription
             if e.response and e.response.status_code in [404, 410]:
                 subscriptions.remove(subscription)
                 save_subscriptions(subscriptions)
+                print(f"🗑️ Removed invalid subscription")
         except Exception as e:
-            print(f"Error sending notification: {e}")
+            print(f"❌ Error sending notification to subscription {idx + 1}: {e}")
             failed_count += 1
+    
+    print(f"📊 Results: Sent={sent_count}, Failed={failed_count}")
+    print("=" * 50)
     
     # Add to history and broadcast
     add_history_event(

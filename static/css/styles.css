@@ -33,8 +33,56 @@ h1 {
 .description {
     text-align: center;
     color: #666;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
     font-size: 1.1em;
+}
+
+.diagnostic-panel {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 25px;
+    border: 2px solid #dee2e6;
+}
+
+.diagnostic-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #495057;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.diagnostic-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 10px;
+    margin: 3px 0;
+    background: white;
+    border-radius: 5px;
+    font-size: 0.9em;
+}
+
+.diagnostic-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.diagnostic-value {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+}
+
+.diagnostic-value.success {
+    color: #28a745;
+}
+
+.diagnostic-value.error {
+    color: #dc3545;
+}
+
+.diagnostic-value.warning {
+    color: #ffc107;
 }
 
 .install-prompt {

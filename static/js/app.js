@@ -276,13 +276,26 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribeToPush() {
     try {
+        // Check if notifications are supported
+        if (!('Notification' in window)) {
+            console.error('❌ ERROR: Este navegador no soporta notificaciones');
+            alert('⚠️ Tu navegador no soporta notificaciones push.\n\nAsegúrate de:\n1. Usar HTTPS (o localhost)\n2. Tener Chrome 90+\n3. Instalar la app como PWA');
+            return;
+        }
+        
+        console.log('🔔 Notification API disponible');
+        console.log('📊 Notification.permission:', Notification.permission);
+        console.log('🌐 window.isSecureContext:', window.isSecureContext);
+        console.log('📱 Display mode:', window.matchMedia('(display-mode: standalone)').matches ? 'PWA' : 'Browser');
+        
         if (!swRegistration) {
-            console.error('ERROR: Service Worker no está registrado');
+            console.error('❌ ERROR: Service Worker no está registrado');
             return;
         }
         
         // Request notification permission
         const permission = await Notification.requestPermission();
+        console.log('✅ Permission result:', permission);
         
         if (permission !== 'granted') {
             console.error('ERROR: Permiso de notificaciones denegado');
@@ -321,6 +334,9 @@ async function subscribeToPush() {
         const result = await subscribeResponse.json();
         isSubscribed = true;
         updateSubscribeButton();
+        
+        // Update diagnostic panel
+        updateDiagnosticPanel();
         
     } catch (error) {
         console.error('Error subscribing to push:', error);
@@ -439,11 +455,81 @@ clearHistoryButton.addEventListener('click', () => {
     }
 });
 
+// Function to update diagnostic panel
+function updateDiagnosticPanel() {
+    const diagSecure = document.getElementById('diagSecure');
+    const diagDisplay = document.getElementById('diagDisplay');
+    const diagNotification = document.getElementById('diagNotification');
+    const diagSW = document.getElementById('diagSW');
+    
+    // Secure Context
+    if (window.isSecureContext) {
+        diagSecure.textContent = '✅ Sí';
+        diagSecure.className = 'diagnostic-value success';
+    } else {
+        diagSecure.textContent = '❌ No';
+        diagSecure.className = 'diagnostic-value error';
+    }
+    
+    // Display Mode
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+    if (isPWA) {
+        diagDisplay.textContent = '✅ PWA';
+        diagDisplay.className = 'diagnostic-value success';
+    } else {
+        diagDisplay.textContent = '⚠️ Browser';
+        diagDisplay.className = 'diagnostic-value warning';
+    }
+    
+    // Notification API
+    if ('Notification' in window) {
+        const perm = Notification.permission;
+        if (perm === 'granted') {
+            diagNotification.textContent = '✅ Permitido';
+            diagNotification.className = 'diagnostic-value success';
+        } else if (perm === 'denied') {
+            diagNotification.textContent = '❌ Denegado';
+            diagNotification.className = 'diagnostic-value error';
+        } else {
+            diagNotification.textContent = '⚠️ Pendiente';
+            diagNotification.className = 'diagnostic-value warning';
+        }
+    } else {
+        diagNotification.textContent = '❌ No disponible';
+        diagNotification.className = 'diagnostic-value error';
+    }
+    
+    // Service Worker
+    if ('serviceWorker' in navigator && swRegistration) {
+        diagSW.textContent = '✅ Activo';
+        diagSW.className = 'diagnostic-value success';
+    } else if ('serviceWorker' in navigator) {
+        diagSW.textContent = '⏳ Cargando...';
+        diagSW.className = 'diagnostic-value warning';
+    } else {
+        diagSW.textContent = '❌ No disponible';
+        diagSW.className = 'diagnostic-value error';
+    }
+}
+
 // Initialize Service Worker (at the end after all functions are defined)
-console.log('Checking Service Worker support...');
-console.log('serviceWorker in navigator:', 'serviceWorker' in navigator);
-console.log('navigator:', navigator);
-console.log('isSecureContext:', window.isSecureContext);
+console.log('=' .repeat(60));
+console.log('🔍 DIAGNÓSTICO DE SOPORTE PWA');
+console.log('=' .repeat(60));
+console.log('🌐 URL:', window.location.href);
+console.log('🔒 Secure Context (HTTPS):', window.isSecureContext);
+console.log('📱 Display Mode:', window.matchMedia('(display-mode: standalone)').matches ? 'PWA (Instalada)' : 'Browser');
+console.log('🔔 Notification API:', 'Notification' in window ? 'Disponible' : '❌ NO DISPONIBLE');
+if ('Notification' in window) {
+    console.log('   └─ Permission:', Notification.permission);
+}
+console.log('⚙️ Service Worker API:', 'serviceWorker' in navigator ? 'Disponible' : '❌ NO DISPONIBLE');
+console.log('📲 Push Manager:', 'PushManager' in window ? 'Disponible' : '❌ NO DISPONIBLE');
+console.log('🔧 User Agent:', navigator.userAgent);
+console.log('=' .repeat(60));
+
+// Update diagnostic panel on load
+updateDiagnosticPanel();
 
 if ('serviceWorker' in navigator) {
     console.log('✅ Service Workers supported. Secure context:', window.isSecureContext);
@@ -453,6 +539,9 @@ if ('serviceWorker' in navigator) {
             console.log('✅ Service Worker registered:', registration);
             swRegistration = registration;
             
+            // Update diagnostic panel
+            updateDiagnosticPanel();
+            
             // Wait for SW to be ready
             return navigator.serviceWorker.ready;
         })
@@ -461,6 +550,7 @@ if ('serviceWorker' in navigator) {
         })
         .catch(error => {
             console.error('❌ Error registering Service Worker:', error);
+            updateDiagnosticPanel();
         });
 } else {
     const reason = !window.isSecureContext ? '(Requiere HTTPS o localhost)' : '(Navegador no compatible)';
