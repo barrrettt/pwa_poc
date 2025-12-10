@@ -736,6 +736,13 @@ async function sendFrontendHeartbeat() {
     deviceFingerprint = await generateDeviceFingerprint();
     console.log('🔑 Device fingerprint initialized:', deviceFingerprint.substring(0, 16) + '...');
     
+    // Display fingerprint in UI
+    const fingerprintValueEl = document.getElementById('fingerprintValue');
+    if (fingerprintValueEl) {
+        fingerprintValueEl.textContent = deviceFingerprint.substring(0, 16) + '...';
+        fingerprintValueEl.title = deviceFingerprint; // Full fingerprint on hover
+    }
+    
     // Connect WebSocket (after all functions are defined)
     connectWebSocket();
 })();
