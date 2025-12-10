@@ -47,6 +47,10 @@
                 <span class="diagnostic-label">⚙️ Service Worker:</span>
                 <span class="diagnostic-value" id="diagSW">-</span>
             </div>
+            <div class="diagnostic-item">
+                <span class="diagnostic-label">⏰ Periodic Sync:</span>
+                <span class="diagnostic-value" id="diagPeriodicSync">-</span>
+            </div>
         </div>
         
         <!-- Row 1: Test Button -->
@@ -69,6 +73,22 @@
         <button class="test-button" id="sendNotificationButton" style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);">
             📬 Enviar Notificación de Prueba
         </button>
+        
+        <!-- Background Activity Monitor -->
+        <div class="activity-monitor" id="activityMonitor">
+            <div class="activity-title">📊 Monitor de Actividad en 2º Plano</div>
+            <div class="activity-content">
+                <div class="activity-item">
+                    <span class="activity-label">Última actividad:</span>
+                    <span class="activity-value" id="activityTime">Cargando...</span>
+                </div>
+                <div class="activity-item">
+                    <span class="activity-label">Estado SW:</span>
+                    <span class="activity-value" id="activityStatus">⏳ Verificando...</span>
+                </div>
+            </div>
+            <button class="activity-refresh" id="activityRefresh">🔄 Actualizar</button>
+        </div>
         
         <div class="history-section">
             <div class="history-header">

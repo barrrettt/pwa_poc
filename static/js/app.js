@@ -149,6 +149,14 @@ function renderHistory(historyData) {
     });
 }
 
+// Listen for messages from Service Worker (for fingerprint requests)
+navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'GET_FINGERPRINT') {
+        // Respond with fingerprint through the message port
+        event.ports[0].postMessage({ fingerprint: deviceFingerprint });
+    }
+});
+
 // Initialize push notifications
 if ('serviceWorker' in navigator && 'PushManager' in window) {
     navigator.serviceWorker.ready.then(registration => {
@@ -455,12 +463,74 @@ clearHistoryButton.addEventListener('click', () => {
     }
 });
 
+// Background Activity Monitor
+const activityRefresh = document.getElementById('activityRefresh');
+const activityTime = document.getElementById('activityTime');
+const activityStatus = document.getElementById('activityStatus');
+
+async function updateActivityMonitor() {
+    try {
+        const response = await fetch(`/api/activity/${deviceFingerprint}`);
+        const data = await response.json();
+        
+        if (data.status === 'never_seen') {
+            activityTime.textContent = 'Sin actividad registrada';
+            activityStatus.textContent = '⏳ Esperando primer heartbeat';
+            activityStatus.className = 'activity-value warning';
+        } else {
+            const minutesAgo = data.minutes_ago;
+            
+            if (minutesAgo < 1) {
+                activityTime.textContent = 'Hace menos de 1 minuto ✅';
+            } else if (minutesAgo < 60) {
+                activityTime.textContent = `Hace ${Math.floor(minutesAgo)} minuto${Math.floor(minutesAgo) > 1 ? 's' : ''}`;
+            } else {
+                const hours = Math.floor(minutesAgo / 60);
+                activityTime.textContent = `Hace ${hours} hora${hours > 1 ? 's' : ''}`;
+            }
+            
+            // Update status based on minutes
+            if (data.status === 'active') {
+                activityStatus.textContent = '✅ SW Activo';
+                activityStatus.className = 'activity-value active';
+            } else if (data.status === 'idle') {
+                activityStatus.textContent = '⚠️ SW Inactivo';
+                activityStatus.className = 'activity-value idle';
+            } else {
+                activityStatus.textContent = '❌ SW Probablemente muerto';
+                activityStatus.className = 'activity-value inactive';
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching activity:', error);
+        activityTime.textContent = 'Error al consultar';
+        activityStatus.textContent = '❌ Error';
+        activityStatus.className = 'activity-value inactive';
+    }
+}
+
+// Update activity on button click
+activityRefresh.addEventListener('click', async () => {
+    activityRefresh.disabled = true;
+    activityRefresh.textContent = '⏳ Consultando...';
+    await updateActivityMonitor();
+    activityRefresh.disabled = false;
+    activityRefresh.textContent = '🔄 Actualizar';
+});
+
+// Auto-update activity every 60 seconds
+setInterval(updateActivityMonitor, 60000);
+
+// Initial update after 2 seconds (give SW time to send first heartbeat)
+setTimeout(updateActivityMonitor, 2000);
+
 // Function to update diagnostic panel
 function updateDiagnosticPanel() {
     const diagSecure = document.getElementById('diagSecure');
     const diagDisplay = document.getElementById('diagDisplay');
     const diagNotification = document.getElementById('diagNotification');
     const diagSW = document.getElementById('diagSW');
+    const diagPeriodicSync = document.getElementById('diagPeriodicSync');
     
     // Secure Context
     if (window.isSecureContext) {
@@ -510,6 +580,15 @@ function updateDiagnosticPanel() {
         diagSW.textContent = '❌ No disponible';
         diagSW.className = 'diagnostic-value error';
     }
+    
+    // Periodic Sync - initial check
+    if ('periodicSync' in ServiceWorkerRegistration.prototype) {
+        diagPeriodicSync.textContent = '⏳ Verificando...';
+        diagPeriodicSync.className = 'diagnostic-value warning';
+    } else {
+        diagPeriodicSync.textContent = '❌ No soportado';
+        diagPeriodicSync.className = 'diagnostic-value error';
+    }
 }
 
 // Initialize Service Worker (at the end after all functions are defined)
@@ -525,6 +604,7 @@ if ('Notification' in window) {
 }
 console.log('⚙️ Service Worker API:', 'serviceWorker' in navigator ? 'Disponible' : '❌ NO DISPONIBLE');
 console.log('📲 Push Manager:', 'PushManager' in window ? 'Disponible' : '❌ NO DISPONIBLE');
+console.log('⏰ Periodic Sync:', 'periodicSync' in ServiceWorkerRegistration.prototype ? 'Disponible' : '❌ NO DISPONIBLE');
 console.log('🔧 User Agent:', navigator.userAgent);
 console.log('=' .repeat(60));
 
@@ -547,6 +627,7 @@ if ('serviceWorker' in navigator) {
         })
         .then(() => {
             checkSubscription();
+            registerPeriodicSync();
         })
         .catch(error => {
             console.error('❌ Error registering Service Worker:', error);
@@ -555,6 +636,56 @@ if ('serviceWorker' in navigator) {
 } else {
     const reason = !window.isSecureContext ? '(Requiere HTTPS o localhost)' : '(Navegador no compatible)';
     console.error('❌ Service Workers not supported', reason);
+}
+
+// Register Periodic Background Sync for heartbeat
+async function registerPeriodicSync() {
+    const diagPeriodicSync = document.getElementById('diagPeriodicSync');
+    
+    try {
+        if ('periodicSync' in ServiceWorkerRegistration.prototype) {
+            const registration = await navigator.serviceWorker.ready;
+            
+            // Request permission for periodic background sync
+            const status = await navigator.permissions.query({
+                name: 'periodic-background-sync',
+            });
+            
+            console.log('⏰ Periodic sync permission:', status.state);
+            
+            // Update diagnostic based on permission
+            if (status.state === 'granted') {
+                // Register periodic sync every 5 minutes (300000 ms)
+                await registration.periodicSync.register('heartbeat-sync', {
+                    minInterval: 5 * 60 * 1000  // 5 minutes
+                });
+                console.log('✅ Periodic sync registered: heartbeat every 5 minutes');
+                
+                // Check registered syncs
+                const tags = await registration.periodicSync.getTags();
+                console.log('📋 Registered periodic syncs:', tags);
+                
+                diagPeriodicSync.textContent = '✅ Activo (5 min)';
+                diagPeriodicSync.className = 'diagnostic-value success';
+            } else if (status.state === 'prompt') {
+                diagPeriodicSync.textContent = '⚠️ Pendiente';
+                diagPeriodicSync.className = 'diagnostic-value warning';
+            } else {
+                diagPeriodicSync.textContent = '❌ Denegado';
+                diagPeriodicSync.className = 'diagnostic-value error';
+                console.warn('⚠️ Periodic sync permission denied');
+            }
+        } else {
+            diagPeriodicSync.textContent = '❌ No soportado';
+            diagPeriodicSync.className = 'diagnostic-value error';
+            console.warn('⚠️ Periodic Background Sync not supported');
+            console.log('💡 Fallback: Using push notifications for background activity');
+        }
+    } catch (error) {
+        console.error('❌ Error registering periodic sync:', error);
+        diagPeriodicSync.textContent = '❌ Error';
+        diagPeriodicSync.className = 'diagnostic-value error';
+    }
 }
 
 // Initialize device fingerprint and connect WebSocket

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v4';
+const CACHE_NAME = 'pwa-poc-v6';
 const urlsToCache = [
   '/',
   '/static/manifest.json',
@@ -8,24 +8,103 @@ const urlsToCache = [
 
 // Install event - cache resources
 self.addEventListener('install', event => {
+  console.log('🔧 SW: Install event');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Cache abierto');
+        console.log('✅ SW: Cache opened');
         return cache.addAll(urlsToCache);
       })
   );
   self.skipWaiting();
 });
 
+// Get device fingerprint from clients or cache
+async function getDeviceFingerprint() {
+  try {
+    // Try to get from clients (if any window is open)
+    const allClients = await clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    if (allClients.length > 0) {
+      const response = await new Promise((resolve) => {
+        const messageChannel = new MessageChannel();
+        messageChannel.port1.onmessage = (event) => {
+          resolve(event.data);
+        };
+        allClients[0].postMessage({ type: 'GET_FINGERPRINT' }, [messageChannel.port2]);
+        setTimeout(() => resolve(null), 1000);
+      });
+      
+      if (response && response.fingerprint) {
+        return response.fingerprint;
+      }
+    }
+    
+    // Fallback: get from cache or generate
+    const cache = await caches.open(CACHE_NAME);
+    const fingerprintKey = 'sw-fingerprint';
+    const cachedResponse = await cache.match(fingerprintKey);
+    
+    if (cachedResponse) {
+      const data = await cachedResponse.json();
+      return data.fingerprint;
+    }
+    
+    // Generate new fingerprint for SW
+    const fingerprint = 'sw-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    await cache.put(fingerprintKey, new Response(JSON.stringify({ fingerprint })));
+    
+    return fingerprint;
+  } catch (e) {
+    console.error('❌ SW: Error getting fingerprint:', e);
+    return 'sw-unknown';
+  }
+}
+
+async function sendHeartbeat() {
+  try {
+    const fingerprint = await getDeviceFingerprint();
+    console.log('💓 SW: Sending heartbeat...', fingerprint.substring(0, 16) + '...');
+    
+    const response = await fetch('/api/heartbeat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ fingerprint })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ SW: Heartbeat sent:', data.registered_at);
+      return true;
+    } else {
+      console.error('❌ SW: Heartbeat failed with status:', response.status);
+      return false;
+    }
+  } catch (e) {
+    console.error('❌ SW: Error sending heartbeat:', e);
+    return false;
+  }
+}
+
+// Periodic Background Sync event - send heartbeat every 5 minutes
+self.addEventListener('periodicsync', event => {
+  console.log('⏰ SW: Periodic sync event triggered:', event.tag);
+  
+  if (event.tag === 'heartbeat-sync') {
+    event.waitUntil(sendHeartbeat());
+  }
+});
+
 // Activate event - clean old caches
 self.addEventListener('activate', event => {
+  console.log('🚀 SW: Activate event');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Eliminando cache antiguo:', cacheName);
+            console.log('🗑️ SW: Removing old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })

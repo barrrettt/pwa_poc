@@ -11,6 +11,9 @@ from pathlib import Path
 import logging
 import asyncio
 from typing import List
+import threading
+import time
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -60,6 +63,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Data files
 SUBSCRIPTIONS_FILE = Path("data/subscriptions.json")
 HISTORY_FILE = Path("data/history.json")
+BACKGROUND_ACTIVITY_FILE = Path("data/background_activity.json")
 
 def load_subscriptions():
     """Load subscriptions from JSON file"""
@@ -96,6 +100,24 @@ def save_history(history):
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(HISTORY_FILE, "w") as f:
         json.dump(history, f, indent=2)
+
+def load_background_activity():
+    """Load background activity log from JSON file"""
+    if BACKGROUND_ACTIVITY_FILE.exists():
+        try:
+            with open(BACKGROUND_ACTIVITY_FILE, "r") as f:
+                content = f.read().strip()
+                if content:
+                    return json.loads(content)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"⚠️ Error loading background activity: {e}. Starting with empty dict.")
+    return {}
+
+def save_background_activity(activity_log):
+    """Save background activity log to JSON file"""
+    BACKGROUND_ACTIVITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(BACKGROUND_ACTIVITY_FILE, "w") as f:
+        json.dump(activity_log, f, indent=2)
 
 def add_history_event(event_type: str, message: str, details: dict = None):
     """Add event to history and broadcast to all clients"""
@@ -235,6 +257,72 @@ async def get_vapid_public_key():
     if not public_key:
         raise HTTPException(status_code=500, detail="VAPID public key not configured")
     return {"publicKey": public_key}
+
+
+@app.post("/api/heartbeat")
+async def heartbeat(request: TestRequest):
+    """Register background activity from Service Worker"""
+    try:
+        activity_log = load_background_activity()
+        
+        fingerprint = request.fingerprint or "unknown"
+        current_time = time.time()
+        
+        activity_log[fingerprint] = {
+            "last_activity": current_time,
+            "timestamp": datetime.fromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        save_background_activity(activity_log)
+        
+        print(f"💓 Heartbeat from {fingerprint[:16]}... at {datetime.now().strftime('%H:%M:%S')}")
+        
+        return {
+            "status": "ok",
+            "fingerprint": fingerprint,
+            "registered_at": activity_log[fingerprint]["timestamp"]
+        }
+    except Exception as e:
+        print(f"❌ Error in heartbeat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/activity/{fingerprint}")
+async def get_activity(fingerprint: str):
+    """Get last activity time for a fingerprint"""
+    try:
+        activity_log = load_background_activity()
+        
+        if fingerprint not in activity_log:
+            return {
+                "fingerprint": fingerprint,
+                "last_activity": None,
+                "minutes_ago": None,
+                "status": "never_seen"
+            }
+        
+        last_activity = activity_log[fingerprint]["last_activity"]
+        current_time = time.time()
+        minutes_ago = (current_time - last_activity) / 60
+        
+        # Determine status
+        if minutes_ago < 10:
+            status = "active"
+        elif minutes_ago < 30:
+            status = "idle"
+        else:
+            status = "inactive"
+        
+        return {
+            "fingerprint": fingerprint,
+            "last_activity": activity_log[fingerprint]["timestamp"],
+            "seconds_ago": int(current_time - last_activity),
+            "minutes_ago": round(minutes_ago, 1),
+            "status": status
+        }
+    except Exception as e:
+        print(f"❌ Error getting activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/subscribe")
@@ -426,11 +514,96 @@ async def service_worker():
     return FileResponse("static/sw.js", media_type="application/javascript")
 
 
+# Background thread for periodic notifications
+def send_inactivity_notifications():
+    """Send periodic inactivity notifications every 30 minutes"""
+    while True:
+        try:
+            time.sleep(30 * 60)  # 30 minutes in seconds
+            
+            print("=" * 50)
+            print("⏰ Sending inactivity notifications...")
+            print(f"🕐 Time: {datetime.now().strftime('%H:%M:%S')}")
+            
+            subscriptions = load_subscriptions()
+            
+            if not subscriptions:
+                print("⚠️ No subscribers for inactivity check")
+                continue
+            
+            vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
+            vapid_email = os.getenv("VAPID_EMAIL")
+            
+            if not vapid_private_key or not vapid_email:
+                print("❌ VAPID keys not configured")
+                continue
+            
+            notification_data = {
+                "title": "⏰ Prueba de Inactividad",
+                "body": f"Notificación automática enviada a las {datetime.now().strftime('%H:%M:%S')}",
+                "icon": "/static/icon-192.png",
+                "badge": "/static/icon-192.png",
+                "tag": f"inactivity-{int(time.time())}",
+                "timestamp": int(time.time() * 1000)
+            }
+            
+            print(f"📦 Notification data: {notification_data}")
+            
+            sent_count = 0
+            failed_count = 0
+            
+            for idx, subscription in enumerate(subscriptions):
+                try:
+                    print(f"📤 Sending to subscription {idx + 1}/{len(subscriptions)}...")
+                    webpush(
+                        subscription_info=subscription,
+                        data=json.dumps(notification_data),
+                        vapid_private_key=vapid_private_key,
+                        vapid_claims={"sub": vapid_email}
+                    )
+                    sent_count += 1
+                    print(f"✅ Sent successfully to subscription {idx + 1}")
+                except WebPushException as e:
+                    print(f"❌ WebPushException for subscription {idx + 1}: {e}")
+                    failed_count += 1
+                except Exception as e:
+                    print(f"❌ Error sending notification to subscription {idx + 1}: {e}")
+                    failed_count += 1
+            
+            print(f"📊 Inactivity check results: Sent={sent_count}, Failed={failed_count}")
+            print("=" * 50)
+            
+            # Add to history
+            add_history_event(
+                "inactivity_check",
+                "⏰ Prueba automática de inactividad",
+                {
+                    "time": datetime.now().strftime('%H:%M:%S'),
+                    "sent": sent_count,
+                    "failed": failed_count
+                }
+            )
+            
+        except Exception as e:
+            print(f"❌ Error in inactivity notification thread: {e}")
+
+
 if __name__ == "__main__":
     import uvicorn
     
     # Suprimir el error de ConnectionResetError en Windows
     logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+    
+    # Clear background activity log on startup
+    if BACKGROUND_ACTIVITY_FILE.exists():
+        BACKGROUND_ACTIVITY_FILE.unlink()
+        print("🗑️ Cleared background activity log from previous session")
+    
+    # Start background thread for inactivity notifications
+    print("🧵 Starting inactivity notification thread...")
+    inactivity_thread = threading.Thread(target=send_inactivity_notifications, daemon=True)
+    inactivity_thread.start()
+    print("✅ Inactivity thread started (will send every 30 minutes)")
     
     print("🚀 Server starting...")
     print("📱 Local: http://localhost:8000")
