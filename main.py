@@ -516,34 +516,38 @@ async def service_worker():
 
 # Background thread for periodic notifications
 def send_inactivity_notifications():
-    """Send periodic inactivity notifications every 30 minutes"""
+    """Send periodic notifications every 1 hour"""
+    # Load env variables in thread context
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     while True:
         try:
-            time.sleep(30 * 60)  # 30 minutes in seconds
+            time.sleep(60 * 60)  # 1 hour in seconds
             
             print("=" * 50)
-            print("⏰ Sending inactivity notifications...")
+            print("⏰ Sending periodic backend notifications...")
             print(f"🕐 Time: {datetime.now().strftime('%H:%M:%S')}")
             
             subscriptions = load_subscriptions()
             
             if not subscriptions:
-                print("⚠️ No subscribers for inactivity check")
+                print("⚠️ No subscribers for periodic notifications")
                 continue
             
             vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
-            vapid_email = os.getenv("VAPID_EMAIL")
+            vapid_email = os.getenv("VAPID_EMAIL") or "mailto:admin@example.com"
             
-            if not vapid_private_key or not vapid_email:
-                print("❌ VAPID keys not configured")
+            if not vapid_private_key:
+                print("❌ VAPID_PRIVATE_KEY not configured")
                 continue
             
             notification_data = {
-                "title": "⏰ Prueba de Inactividad",
+                "title": "⏰ Notificación Periódica del Backend",
                 "body": f"Notificación automática enviada a las {datetime.now().strftime('%H:%M:%S')}",
                 "icon": "/static/icon-192.png",
                 "badge": "/static/icon-192.png",
-                "tag": f"inactivity-{int(time.time())}",
+                "tag": f"backend-periodic-{int(time.time())}",
                 "timestamp": int(time.time() * 1000)
             }
             
@@ -570,13 +574,13 @@ def send_inactivity_notifications():
                     print(f"❌ Error sending notification to subscription {idx + 1}: {e}")
                     failed_count += 1
             
-            print(f"📊 Inactivity check results: Sent={sent_count}, Failed={failed_count}")
+            print(f"📊 Periodic notification results: Sent={sent_count}, Failed={failed_count}")
             print("=" * 50)
             
             # Add to history
             add_history_event(
-                "inactivity_check",
-                "⏰ Prueba automática de inactividad",
+                "periodic_notification",
+                "⏰ Notificación periódica del backend",
                 {
                     "time": datetime.now().strftime('%H:%M:%S'),
                     "sent": sent_count,
@@ -585,7 +589,7 @@ def send_inactivity_notifications():
             )
             
         except Exception as e:
-            print(f"❌ Error in inactivity notification thread: {e}")
+            print(f"❌ Error in periodic notification thread: {e}")
 
 
 if __name__ == "__main__":
@@ -600,10 +604,10 @@ if __name__ == "__main__":
         print("🗑️ Cleared background activity log from previous session")
     
     # Start background thread for inactivity notifications
-    print("🧵 Starting inactivity notification thread...")
+    print("🧵 Starting periodic notification thread...")
     inactivity_thread = threading.Thread(target=send_inactivity_notifications, daemon=True)
     inactivity_thread.start()
-    print("✅ Inactivity thread started (will send every 30 minutes)")
+    print("✅ Periodic notification thread started (will send every 1 hour)")
     
     print("🚀 Server starting...")
     print("📱 Local: http://localhost:8000")

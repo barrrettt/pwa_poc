@@ -101,7 +101,7 @@ Panel en tiempo real que verifica:
 ### Caso 3: Notificaciones Automáticas
 1. Suscríbete a notificaciones (botón "🔔 Suscribirse")
 2. Cierra la app
-3. Cada 30 minutos recibirás: "⏰ Prueba de Inactividad"
+3. Cada X minutos recibirás: "⏰ Prueba de Inactividad"
 4. Estas notificaciones también registran actividad
 
 ## 🔧 Endpoints del Backend
