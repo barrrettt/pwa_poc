@@ -1,0 +1,23 @@
+[
+  {
+    "type": "test",
+    "message": "\ud83e\uddea Test endpoint called",
+    "details": {
+      "data": "test ok",
+      "fingerprint": "adb7d446fc280f18"
+    },
+    "timestamp": 1765364791.3418946
+  },
+  {
+    "type": "notification",
+    "message": "\ud83d\udd14 Notificaci\u00f3n enviada: PWA POC - Prueba",
+    "details": {
+      "title": "PWA POC - Prueba",
+      "body": "Notificaci\u00f3n de prueba enviada a las 13:06:34",
+      "sent": 2,
+      "failed": 0,
+      "tag": "pwa-poc-1765364795"
+    },
+    "timestamp": 1765364795.9498882
+  }
+]

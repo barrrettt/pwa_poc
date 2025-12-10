@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -10,9 +10,47 @@ import base64
 from pathlib import Path
 import logging
 import asyncio
+from typing import List
 
 # Load environment variables
 load_dotenv()
+
+app = FastAPI()
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        print(f"📡 WebSocket connected. Total: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        print(f"📡 WebSocket disconnected. Total: {len(self.active_connections)}")
+
+    async def broadcast(self, message: dict):
+        print(f"📤 Broadcasting to {len(self.active_connections)} connections: {message.get('type', 'unknown')}")
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                print(f"❌ Error broadcasting to websocket: {e}")
+                disconnected.append(connection)
+        
+        # Remove disconnected connections
+        for conn in disconnected:
+            if conn in self.active_connections:
+                self.active_connections.remove(conn)
+        
+        if disconnected:
+            print(f"🧹 Cleaned {len(disconnected)} dead connections. Remaining: {len(self.active_connections)}")
+
+manager = ConnectionManager()
 
 app = FastAPI()
 
@@ -21,6 +59,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Subscriptions file
 SUBSCRIPTIONS_FILE = Path("subscriptions.json")
+HISTORY_FILE = Path("history.json")
 
 def load_subscriptions():
     """Load subscriptions from JSON file"""
@@ -34,8 +73,39 @@ def save_subscriptions(subscriptions):
     with open(SUBSCRIPTIONS_FILE, "w") as f:
         json.dump(subscriptions, f, indent=2)
 
-# Load subscriptions on startup
+def load_history():
+    """Load history from JSON file"""
+    if HISTORY_FILE.exists():
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_history(history):
+    """Save history to JSON file"""
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=2)
+
+def add_history_event(event_type: str, message: str, details: dict = None):
+    """Add event to history and broadcast to all clients"""
+    import time
+    event = {
+        "type": event_type,
+        "message": message,
+        "details": details or {},
+        "timestamp": time.time()
+    }
+    print(f"🔵 Adding event to history: {event_type} - {message}")
+    history.append(event)
+    # Keep only last 50 events
+    if len(history) > 50:
+        history.pop(0)
+    save_history(history)
+    print(f"💾 History saved. Total events: {len(history)}")
+    return event
+
+# Load data on startup
 subscriptions = load_subscriptions()
+history = load_history()
 
 
 class TestResponse(BaseModel):
@@ -45,6 +115,7 @@ class TestResponse(BaseModel):
 class PushSubscription(BaseModel):
     endpoint: str
     keys: dict
+    device_fingerprint: str  # Unique device identifier
 
 
 class NotificationPayload(BaseModel):
@@ -53,15 +124,86 @@ class NotificationPayload(BaseModel):
     icon: str = "/static/icon-192.png"
 
 
+class TestRequest(BaseModel):
+    fingerprint: str = ""
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open("templates/index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 
-@app.get("/api/test", response_model=TestResponse)
-async def test_endpoint():
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    print(f"🔌 New WebSocket connection attempt from {websocket.client}")
+    await manager.connect(websocket)
+    print(f"✅ WebSocket connected. Total connections: {len(manager.active_connections)}")
+    try:
+        while True:
+            # Receive messages from client
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            print(f"📨 Received message: {message}")
+            
+            # Process message and broadcast to all clients
+            if message.get('type') == 'clear_history':
+                global history
+                history.clear()
+                save_history(history)
+                await manager.broadcast({'type': 'history_update', 'history': history})
+                print("🗑️ History cleared and broadcast to all clients")
+            
+    except WebSocketDisconnect:
+        print(f"🔌 WebSocket disconnect event")
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+    finally:
+        manager.disconnect(websocket)
+        print(f"🧹 Cleanup complete. Remaining connections: {len(manager.active_connections)}")
+
+
+@app.get("/api/history")
+async def get_history():
+    """Get current history"""
+    return {"history": history}
+
+
+@app.post("/api/history/clear")
+async def clear_history():
+    """Clear history"""
+    global history
+    history.clear()
+    save_history(history)
+    await manager.broadcast({'type': 'history_update', 'history': history})
+    return {"status": "cleared"}
+
+
+@app.post("/api/test", response_model=TestResponse)
+async def test_endpoint(request: TestRequest):
+    print("=" * 50)
     print("📡 Test endpoint called")
+    print(f"👤 Fingerprint: {request.fingerprint[:16] if request.fingerprint else 'Unknown'}...")
+    print(f"📊 Current history length: {len(history)}")
+    print(f"🔌 Active WebSocket connections: {len(manager.active_connections)}")
+    
+    # Add to history
+    event = add_history_event(
+        "test", 
+        "🧪 Test endpoint called", 
+        {
+            "data": "test ok",
+            "fingerprint": request.fingerprint[:16] if request.fingerprint else "Unknown"
+        }
+    )
+    print(f"✅ Event added: {event}")
+    print(f"📊 New history length: {len(history)}")
+    
+    # Broadcast history update
+    await manager.broadcast({"type": "history_update", "history": history})
+    print("📤 Broadcast sent to all connections")
+    print("=" * 50)
+    
     return {"data": "test ok"}
 
 
@@ -77,14 +219,29 @@ async def get_vapid_public_key():
 @app.post("/api/subscribe")
 async def subscribe(subscription: PushSubscription):
     """Store push subscription"""
-    # Check if already subscribed
-    for sub in subscriptions:
-        if sub["endpoint"] == subscription.endpoint:
-            return {"status": "already_subscribed"}
+    # Remove old subscription from same device (based on fingerprint)
+    subscriptions[:] = [
+        sub for sub in subscriptions 
+        if sub.get("device_fingerprint") != subscription.device_fingerprint
+    ]
     
-    subscriptions.append(subscription.model_dump())
+    # Add new subscription
+    subscriptions.append(subscription.dict())
     save_subscriptions(subscriptions)
-    print(f"New subscription added. Total subscriptions: {len(subscriptions)}")
+    print(f"✅ New subscription from device: {subscription.device_fingerprint[:16]}...")
+    print(f"📊 Total subscriptions: {len(subscriptions)}")
+    
+    # Add to history and broadcast
+    add_history_event(
+        event_type="subscription",
+        message=f"📱 Dispositivo suscrito",
+        details={
+            "device": subscription.device_fingerprint[:16],
+            "total": len(subscriptions)
+        }
+    )
+    await manager.broadcast({"type": "history_update", "history": history})
+    
     return {"status": "subscribed", "total": len(subscriptions)}
 
 
@@ -93,11 +250,36 @@ async def unsubscribe(subscription: PushSubscription):
     """Remove push subscription"""
     global subscriptions
     initial_count = len(subscriptions)
-    subscriptions = [s for s in subscriptions if s["endpoint"] != subscription.endpoint]
+    subscriptions = [
+        s for s in subscriptions 
+        if s.get("device_fingerprint") != subscription.device_fingerprint
+    ]
     removed = initial_count - len(subscriptions)
     save_subscriptions(subscriptions)
+    print(f"🗑️ Unsubscribed device: {subscription.device_fingerprint[:16]}...")
+    
+    # Add to history and broadcast
+    add_history_event(
+        event_type="subscription",
+        message=f"📴 Dispositivo desuscrito",
+        details={
+            "device": subscription.device_fingerprint[:16],
+            "total": len(subscriptions)
+        }
+    )
+    await manager.broadcast({"type": "history_update", "history": history})
     
     return {"status": "unsubscribed", "removed": removed, "total": len(subscriptions)}
+
+
+@app.get("/api/check-subscription/{fingerprint}")
+async def check_subscription(fingerprint: str):
+    """Check if a device is subscribed"""
+    is_subscribed = any(
+        sub.get("device_fingerprint") == fingerprint 
+        for sub in subscriptions
+    )
+    return {"subscribed": is_subscribed}
 
 
 @app.post("/api/send-notification")
@@ -149,6 +331,20 @@ async def send_notification(payload: NotificationPayload):
         except Exception as e:
             print(f"Error sending notification: {e}")
             failed_count += 1
+    
+    # Add to history and broadcast
+    add_history_event(
+        event_type="notification",
+        message=f"🔔 Notificación enviada: {payload.title}",
+        details={
+            "title": payload.title,
+            "body": payload.body,
+            "sent": sent_count,
+            "failed": failed_count,
+            "tag": notification_tag
+        }
+    )
+    await manager.broadcast({"type": "history_update", "history": history})
     
     return {
         "status": "sent",

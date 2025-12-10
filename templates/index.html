@@ -291,49 +291,22 @@
                 testButton.disabled = true;
                 testButton.textContent = '⏳ Probando...';
                 
-                const response = await fetch('/api/test');
+                // Call the API with fingerprint
+                const response = await fetch('/api/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        fingerprint: deviceFingerprint
+                    })
+                });
                 const result = await response.json();
                 
-                // Remove empty message if exists
-                const emptyMessage = historyList.querySelector('.empty-message');
-                if (emptyMessage) {
-                    emptyMessage.remove();
-                }
-                
-                // Create history item
-                const historyItem = document.createElement('li');
-                historyItem.className = 'history-item';
-                
-                const timestamp = new Date().toLocaleString('es-ES');
-                
-                historyItem.innerHTML = `
-                    <div class="event-name">boton-test</div>
-                    <div class="event-details">
-                        <strong>Respuesta:</strong> <span class="status-ok">OK</span><br>
-                        <strong>Data:</strong> "${result.data}"<br>
-                        <strong>Timestamp:</strong> ${timestamp}
-                    </div>
-                `;
-                
-                // Add to top of list
-                historyList.insertBefore(historyItem, historyList.firstChild);
+                console.log('✅ Test response:', result);
                 
             } catch (error) {
-                console.error('Error:', error);
-                
-                const historyItem = document.createElement('li');
-                historyItem.className = 'history-item';
-                historyItem.style.borderLeftColor = '#f44336';
-                
-                historyItem.innerHTML = `
-                    <div class="event-name">boton-test</div>
-                    <div class="event-details">
-                        <strong>Respuesta:</strong> <span style="color: #f44336; font-weight: bold;">ERROR</span><br>
-                        <strong>Error:</strong> ${error.message}
-                    </div>
-                `;
-                
-                historyList.insertBefore(historyItem, historyList.firstChild);
+                console.error('❌ Test error:', error);
             } finally {
                 testButton.disabled = false;
                 testButton.textContent = '🧪 Test Endpoint';
@@ -364,6 +337,80 @@
         const subscribeButton = document.getElementById('subscribeButton');
         const sendNotificationButton = document.getElementById('sendNotificationButton');
         let isSubscribed = false;
+        let ws = null;
+        let deviceFingerprint = '';
+        
+        // Initialize WebSocket
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = async () => {
+                console.log('🔌 WebSocket connected');
+                
+                // Load initial history from server
+                try {
+                    const response = await fetch('/api/history');
+                    const data = await response.json();
+                    console.log('📚 Initial history loaded:', data.history);
+                    renderHistory(data.history);
+                } catch (error) {
+                    console.error('❌ Error loading initial history:', error);
+                }
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('📨 WebSocket message:', data);
+                
+                // Backend sends history_update with full history
+                if (data.type === 'history_update') {
+                    renderHistory(data.history);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('🔌 WebSocket disconnected, reconnecting...');
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+            };
+        }
+        
+        // Render history from backend data
+        function renderHistory(historyData) {
+            console.log('🎨 Rendering history. Items:', historyData.length, historyData);
+            historyList.innerHTML = '';
+            
+            if (!historyData || historyData.length === 0) {
+                historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
+                return;
+            }
+            
+            // Render in reverse order (newest first)
+            historyData.slice().reverse().forEach(event => {
+                const historyItem = document.createElement('li');
+                historyItem.className = 'history-item';
+                
+                const date = new Date(event.timestamp * 1000);
+                const timestamp = date.toLocaleString('es-ES');
+                
+                historyItem.innerHTML = `
+                    <div class="event-name">${event.type}</div>
+                    <div class="event-details">
+                        ${event.message}<br>
+                        ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
+                        <strong>Timestamp:</strong> ${timestamp}
+                    </div>
+                `;
+                
+                historyList.appendChild(historyItem);
+            });
+        }
         
         // Initialize push notifications
         if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -393,6 +440,88 @@
             }
         }
         
+        // Generate device fingerprint with high uniqueness
+        async function generateDeviceFingerprint() {
+            // Check if we have a stored fingerprint in localStorage
+            let storedFingerprint = localStorage.getItem('device_fingerprint');
+            if (storedFingerprint) {
+                console.log('Using stored fingerprint:', storedFingerprint.substring(0, 16) + '...');
+                return storedFingerprint;
+            }
+            
+            // Collect comprehensive device characteristics
+            const characteristics = [];
+            
+            // Basic browser info
+            characteristics.push(navigator.userAgent);
+            characteristics.push(navigator.language);
+            characteristics.push(navigator.languages ? navigator.languages.join(',') : '');
+            characteristics.push(navigator.platform);
+            characteristics.push(navigator.hardwareConcurrency || 'unknown');
+            characteristics.push(navigator.deviceMemory || 'unknown');
+            
+            // Screen info
+            characteristics.push(screen.width + 'x' + screen.height);
+            characteristics.push(screen.availWidth + 'x' + screen.availHeight);
+            characteristics.push(screen.colorDepth);
+            characteristics.push(screen.pixelDepth);
+            characteristics.push(window.devicePixelRatio || 1);
+            
+            // Timezone
+            characteristics.push(new Date().getTimezoneOffset());
+            characteristics.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
+            
+            // Location info
+            characteristics.push(window.location.origin);
+            characteristics.push(window.location.protocol);
+            
+            // Display mode
+            characteristics.push(window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'browser');
+            
+            // Canvas fingerprint (more unique)
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#f60';
+                ctx.fillRect(0, 0, 62, 20);
+                ctx.fillStyle = '#069';
+                ctx.fillText('PWA POC 🔒', 2, 2);
+                characteristics.push(canvas.toDataURL());
+            } catch (e) {
+                characteristics.push('canvas-blocked');
+            }
+            
+            // WebGL fingerprint
+            try {
+                const gl = document.createElement('canvas').getContext('webgl');
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                characteristics.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
+                characteristics.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+            } catch (e) {
+                characteristics.push('webgl-blocked');
+            }
+            
+            // Add random component if first time (to ensure absolute uniqueness)
+            const randomSeed = crypto.getRandomValues(new Uint8Array(16));
+            characteristics.push(Array.from(randomSeed).map(b => b.toString(16).padStart(2, '0')).join(''));
+            
+            // Generate hash
+            const data = characteristics.join('|');
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(data);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const fingerprint = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            // Store in localStorage for consistency
+            localStorage.setItem('device_fingerprint', fingerprint);
+            console.log('Generated new fingerprint:', fingerprint.substring(0, 16) + '...');
+            
+            return fingerprint;
+        }
+        
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
             const base64 = (base64String + padding)
@@ -411,7 +540,7 @@
         async function subscribeToPush() {
             try {
                 if (!swRegistration) {
-                    addHistoryItem('Suscripción Push', 'ERROR: Service Worker no está registrado. Recarga la página.', 'error');
+                    console.error('ERROR: Service Worker no está registrado');
                     return;
                 }
                 
@@ -419,7 +548,7 @@
                 const permission = await Notification.requestPermission();
                 
                 if (permission !== 'granted') {
-                    addHistoryItem('Notificaciones', 'ERROR: Permiso denegado', 'error');
+                    console.error('ERROR: Permiso de notificaciones denegado');
                     return;
                 }
                 
@@ -434,24 +563,30 @@
                     applicationServerKey: applicationServerKey
                 });
                 
+                // Use global device fingerprint
+                console.log('Device fingerprint:', deviceFingerprint.substring(0, 16) + '...');
+                
+                // Add fingerprint to subscription
+                const subscriptionWithFingerprint = {
+                    ...subscription.toJSON(),
+                    device_fingerprint: deviceFingerprint
+                };
+                
                 // Send subscription to server
                 const subscribeResponse = await fetch('/api/subscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(subscription)
+                    body: JSON.stringify(subscriptionWithFingerprint)
                 });
                 
                 const result = await subscribeResponse.json();
                 isSubscribed = true;
                 updateSubscribeButton();
                 
-                addHistoryItem('Suscripción Push', `✅ Suscrito correctamente (Total: ${result.total})`, 'success');
-                
             } catch (error) {
                 console.error('Error subscribing to push:', error);
-                addHistoryItem('Suscripción Push', `ERROR: ${error.message}`, 'error');
             }
         }
         
@@ -462,23 +597,29 @@
                 if (subscription) {
                     await subscription.unsubscribe();
                     
+                    // Use global device fingerprint
+                    
+                    // Add fingerprint to subscription
+                    const subscriptionWithFingerprint = {
+                        ...subscription.toJSON(),
+                        device_fingerprint: deviceFingerprint
+                    };
+                    
                     // Notify server
                     await fetch('/api/unsubscribe', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(subscription)
+                        body: JSON.stringify(subscriptionWithFingerprint)
                     });
                 }
                 
                 isSubscribed = false;
                 updateSubscribeButton();
-                addHistoryItem('Suscripción Push', '❌ Suscripción cancelada', 'success');
                 
             } catch (error) {
                 console.error('Error unsubscribing:', error);
-                addHistoryItem('Suscripción Push', `ERROR: ${error.message}`, 'error');
             }
         }
         
@@ -508,59 +649,24 @@
                 });
                 
                 const result = await response.json();
-                
-                if (result.sent > 0) {
-                    addHistoryItem('Enviar Notificación', `✅ Enviada a ${result.sent} suscriptor(es)`, 'success');
-                } else {
-                    addHistoryItem('Enviar Notificación', '⚠️ No hay suscriptores', 'warning');
-                }
+                console.log('Notification sent:', result);
                 
             } catch (error) {
                 console.error('Error:', error);
-                addHistoryItem('Enviar Notificación', `ERROR: ${error.message}`, 'error');
             } finally {
                 sendNotificationButton.disabled = false;
                 sendNotificationButton.textContent = '📬 Enviar Notificación de Prueba';
             }
         });
         
-        // Helper function to add history items
-        function addHistoryItem(eventName, message, type = 'info') {
-            const emptyMessage = historyList.querySelector('.empty-message');
-            if (emptyMessage) {
-                emptyMessage.remove();
-            }
-            
-            const historyItem = document.createElement('li');
-            historyItem.className = 'history-item';
-            
-            if (type === 'error') {
-                historyItem.style.borderLeftColor = '#f44336';
-            } else if (type === 'success') {
-                historyItem.style.borderLeftColor = '#4CAF50';
-            } else if (type === 'warning') {
-                historyItem.style.borderLeftColor = '#FF9800';
-            }
-            
-            const timestamp = new Date().toLocaleString('es-ES');
-            
-            historyItem.innerHTML = `
-                <div class="event-name">${eventName}</div>
-                <div class="event-details">
-                    ${message}<br>
-                    <strong>Timestamp:</strong> ${timestamp}
-                </div>
-            `;
-            
-            historyList.insertBefore(historyItem, historyList.firstChild);
-        }
-        
         // Clear history functionality
         const clearHistoryButton = document.getElementById('clearHistoryButton');
         
         clearHistoryButton.addEventListener('click', () => {
-            historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
-            addHistoryItem('Sistema', '🗑️ Histórico limpiado', 'info');
+            // Send clear event to server via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'clear_history' }));
+            }
         });
         
         // Initialize Service Worker (at the end after all functions are defined)
@@ -570,13 +676,12 @@
         console.log('isSecureContext:', window.isSecureContext);
         
         if ('serviceWorker' in navigator) {
-            addHistoryItem('Sistema', `✅ Service Workers soportados. Secure context: ${window.isSecureContext}`, 'info');
+            console.log('✅ Service Workers supported. Secure context:', window.isSecureContext);
             
             navigator.serviceWorker.register('/sw.js', { scope: '/' })
                 .then(registration => {
-                    console.log('✅ Service Worker registrado:', registration);
+                    console.log('✅ Service Worker registered:', registration);
                     swRegistration = registration;
-                    addHistoryItem('Service Worker', '✅ Service Worker registrado correctamente', 'success');
                     
                     // Wait for SW to be ready
                     return navigator.serviceWorker.ready;
@@ -585,13 +690,22 @@
                     checkSubscription();
                 })
                 .catch(error => {
-                    console.error('❌ Error al registrar Service Worker:', error);
-                    addHistoryItem('Service Worker', `❌ ERROR: ${error.message}`, 'error');
+                    console.error('❌ Error registering Service Worker:', error);
                 });
         } else {
             const reason = !window.isSecureContext ? '(Requiere HTTPS o localhost)' : '(Navegador no compatible)';
-            addHistoryItem('Service Worker', `❌ Service Workers no soportados ${reason}`, 'error');
+            console.error('❌ Service Workers not supported', reason);
         }
+        
+        // Initialize device fingerprint and connect WebSocket
+        (async function init() {
+            // Generate device fingerprint
+            deviceFingerprint = await generateDeviceFingerprint();
+            console.log('🔑 Device fingerprint initialized:', deviceFingerprint.substring(0, 16) + '...');
+            
+            // Connect WebSocket (after all functions are defined)
+            connectWebSocket();
+        })();
     </script>
 </body>
 </html>
