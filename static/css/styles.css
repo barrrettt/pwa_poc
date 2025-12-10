@@ -204,3 +204,11 @@ h1 {
 .scroll-to-top:active {
     transform: translateY(-2px);
 }
+
+/* Responsive para móviles */
+@media (max-width: 480px) {
+    .button-row .test-button {
+        font-size: 0.95em;
+        padding: 12px 20px;
+    }
+}

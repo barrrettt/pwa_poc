@@ -169,10 +169,10 @@ async function checkSubscription() {
 
 function updateSubscribeButton() {
     if (isSubscribed) {
-        subscribeButton.textContent = '🔕 Cancelar Suscripción';
+        subscribeButton.textContent = '🔕 Cancelar';
         subscribeButton.style.background = 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)';
     } else {
-        subscribeButton.textContent = '🔔 Suscribirse a Notificaciones';
+        subscribeButton.textContent = '🔔 Suscribirse';
         subscribeButton.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
     }
 }
@@ -425,7 +425,7 @@ clearSubscriptionsButton.addEventListener('click', async () => {
         console.error('Error clearing subscriptions:', error);
     } finally {
         clearSubscriptionsButton.disabled = false;
-        clearSubscriptionsButton.textContent = '🗑️ Borrar Todas las Suscripciones';
+        clearSubscriptionsButton.textContent = '🗑️ Borrar Subs';
     }
 });
 
