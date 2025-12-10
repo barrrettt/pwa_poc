@@ -40,35 +40,39 @@ VAPID_PUBLIC_KEY=tu_clave_publica_aqui
 VAPID_PRIVATE_KEY=tu_clave_privada_aqui
 ```
 
-### 4. Certificados HTTPS (opcional)
-
-Los certificados ya están incluidos en el repositorio en la carpeta `cert/`. Son válidos para desarrollo local hasta marzo de 2028.
-
-Si necesitas generar nuevos certificados:
-
-```powershell
-# Instalar mkcert
-choco install mkcert
-
-# Instalar la CA local
-mkcert -install
-
-# Generar certificados
-mkcert localhost 127.0.0.1 ::1
-
-# Crear carpeta cert y mover archivos
-New-Item -ItemType Directory -Path cert
-Move-Item localhost+2.pem cert/
-Move-Item localhost+2-key.pem cert/
-```
-
-### 5. Ejecutar la aplicación
+### 4. Ejecutar la aplicación
 
 ```powershell
 python main.py
 ```
 
-La aplicación estará disponible en: **https://localhost:8000**
+La aplicación estará disponible en: **http://localhost:8000**
+
+### 5. Probar en móvil con ngrok (recomendado)
+
+Para probar la PWA en tu móvil con HTTPS real (necesario para Service Workers):
+
+1. Instala ngrok: https://ngrok.com/download
+
+2. En otra terminal, ejecuta:
+```powershell
+ngrok http 8000
+```
+
+3. Ngrok te dará una URL HTTPS pública (ej: `https://abc123.ngrok.io`)
+
+4. Abre esa URL en tu móvil
+
+5. Ahora podrás:
+   - Instalar la PWA
+   - Usar Service Workers
+   - Probar notificaciones push
+
+**Ventajas de ngrok:**
+- ✅ HTTPS real (certificado válido)
+- ✅ Accesible desde cualquier dispositivo
+- ✅ No requiere configuración de firewall
+- ✅ Funciona con Service Workers sin problemas
 
 ## Características
 
@@ -77,7 +81,7 @@ La aplicación estará disponible en: **https://localhost:8000**
 - ✅ Notificaciones Push Web
 - ✅ Interfaz responsive con gradiente
 - ✅ API REST con FastAPI
-- ✅ HTTPS para desarrollo local
+- ✅ Desarrollo con ngrok para HTTPS real
 
 ## Importante
 

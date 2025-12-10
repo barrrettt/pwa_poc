@@ -253,23 +253,8 @@
     <button class="scroll-to-top" id="scrollToTop">↑</button>
     
     <script>
-        // Service Worker Registration
+        // Service Worker Registration (will be initialized at the end)
         let swRegistration = null;
-        
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
-                .then(registration => {
-                    console.log('Service Worker registrado:', registration);
-                    swRegistration = registration;
-                    checkSubscription();
-                })
-                .catch(error => {
-                    console.log('Error al registrar Service Worker:', error);
-                    addHistoryItem('Service Worker', `ERROR: ${error.message}`, 'error');
-                });
-        } else {
-            addHistoryItem('Service Worker', 'ERROR: Service Workers no soportados en este navegador', 'error');
-        }
         
         // Install prompt
         let deferredPrompt;
@@ -572,6 +557,36 @@
             historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
             addHistoryItem('Sistema', '🗑️ Histórico limpiado', 'info');
         });
+        
+        // Initialize Service Worker (at the end after all functions are defined)
+        console.log('Checking Service Worker support...');
+        console.log('serviceWorker in navigator:', 'serviceWorker' in navigator);
+        console.log('navigator:', navigator);
+        console.log('isSecureContext:', window.isSecureContext);
+        
+        if ('serviceWorker' in navigator) {
+            addHistoryItem('Sistema', `✅ Service Workers soportados. Secure context: ${window.isSecureContext}`, 'info');
+            
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(registration => {
+                    console.log('✅ Service Worker registrado:', registration);
+                    swRegistration = registration;
+                    addHistoryItem('Service Worker', '✅ Service Worker registrado correctamente', 'success');
+                    
+                    // Wait for SW to be ready
+                    return navigator.serviceWorker.ready;
+                })
+                .then(() => {
+                    checkSubscription();
+                })
+                .catch(error => {
+                    console.error('❌ Error al registrar Service Worker:', error);
+                    addHistoryItem('Service Worker', `❌ ERROR: ${error.message}`, 'error');
+                });
+        } else {
+            const reason = !window.isSecureContext ? '(Requiere HTTPS o localhost)' : '(Navegador no compatible)';
+            addHistoryItem('Service Worker', `❌ Service Workers no soportados ${reason}`, 'error');
+        }
     </script>
 </body>
 </html>

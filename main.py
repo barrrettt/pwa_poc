@@ -170,16 +170,14 @@ if __name__ == "__main__":
     logging.getLogger("asyncio").setLevel(logging.CRITICAL)
     
     print("🚀 Server starting...")
-    print("🔒 HTTPS enabled")
-    print("📱 Open: https://localhost:8000")
-    print("📱 Or from mobile: https://192.168.0.27:8000")
+    print("📱 Local: http://localhost:8000")
+    print("🌐 For mobile: Use ngrok (see README.md)")
+    print("   Run: ngrok http 8000")
     print("⚠️  Close terminal to stop server")
     
     uvicorn.run(
         app, 
         host="0.0.0.0", 
         port=8000,
-        log_level="info",
-        ssl_keyfile="cert/localhost+3-key.pem",
-        ssl_certfile="cert/localhost+3.pem"
+        log_level="info"
     )
