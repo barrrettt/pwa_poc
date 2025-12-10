@@ -112,7 +112,8 @@ self.addEventListener('push', event => {
     icon: notificationData.icon || '/static/icon-192.png',
     badge: notificationData.badge || '/static/icon-192.png',
     vibrate: [200, 100, 200],
-    tag: 'pwa-notification',
+    tag: notificationData.tag || 'pwa-notification',
+    timestamp: notificationData.timestamp || Date.now(),
     requireInteraction: false,
     data: {
       dateOfArrival: Date.now(),

@@ -114,12 +114,17 @@ async def send_notification(payload: NotificationPayload):
     if not vapid_private_key or not vapid_public_key:
         raise HTTPException(status_code=500, detail="VAPID keys not configured")
     
+    # Generate unique tag with timestamp to avoid duplicates across devices
+    import time
+    notification_tag = f"pwa-poc-{int(time.time())}"
+    
     notification_data = {
         "title": payload.title,
         "body": payload.body,
         "icon": payload.icon,
         "badge": "/static/icon-192.png",
-        "timestamp": None
+        "tag": notification_tag,
+        "timestamp": int(time.time() * 1000)
     }
     
     sent_count = 0
@@ -149,7 +154,8 @@ async def send_notification(payload: NotificationPayload):
         "status": "sent",
         "sent": sent_count,
         "failed": failed_count,
-        "total_subscribers": len(subscriptions)
+        "total_subscribers": len(subscriptions),
+        "tag": notification_tag
     }
 
 
