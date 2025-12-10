@@ -52,7 +52,7 @@ La aplicación estará disponible en: **http://localhost:8000**
 
 Para probar la PWA en tu móvil con HTTPS real (necesario para Service Workers):
 
-1. Instala ngrok: https://ngrok.com/download
+1. Instala ngrok: https://ngrok.com/download o choco install ngrok
 
 2. En otra terminal, ejecuta:
 ```powershell
