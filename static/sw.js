@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v2';
+const CACHE_NAME = 'pwa-poc-v3';
 const urlsToCache = [
   '/',
   '/static/manifest.json',
@@ -35,7 +35,7 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - Network first for HTML, cache first for static assets
 self.addEventListener('fetch', event => {
   // Don't cache POST requests or other non-GET methods
   if (event.request.method !== 'GET') {
@@ -43,6 +43,27 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // Network first for HTML pages
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Clone the response before caching
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          // Fallback to cache if network fails
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // Cache first for static assets
   event.respondWith(
     caches.match(event.request)
       .then(response => {

@@ -384,6 +384,7 @@
         // Render history from backend data
         function renderHistory(historyData) {
             console.log('🎨 Rendering history. Items:', historyData.length, historyData);
+            console.trace('🔍 renderHistory called from:');
             historyList.innerHTML = '';
             
             if (!historyData || historyData.length === 0) {

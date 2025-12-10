@@ -4,20 +4,26 @@
     "message": "\ud83e\uddea Test endpoint called",
     "details": {
       "data": "test ok",
-      "fingerprint": "adb7d446fc280f18"
+      "fingerprint": "ac92811c3acaf70e"
     },
-    "timestamp": 1765364791.3418946
+    "timestamp": 1765365179.8639848
   },
   {
-    "type": "notification",
-    "message": "\ud83d\udd14 Notificaci\u00f3n enviada: PWA POC - Prueba",
+    "type": "test",
+    "message": "\ud83e\uddea Test endpoint called",
     "details": {
-      "title": "PWA POC - Prueba",
-      "body": "Notificaci\u00f3n de prueba enviada a las 13:06:34",
-      "sent": 2,
-      "failed": 0,
-      "tag": "pwa-poc-1765364795"
+      "data": "test ok",
+      "fingerprint": "ac92811c3acaf70e"
     },
-    "timestamp": 1765364795.9498882
+    "timestamp": 1765365181.676175
+  },
+  {
+    "type": "test",
+    "message": "\ud83e\uddea Test endpoint called",
+    "details": {
+      "data": "test ok",
+      "fingerprint": "ac92811c3acaf70e"
+    },
+    "timestamp": 1765365182.559232
   }
 ]
