@@ -64,24 +64,36 @@ HISTORY_FILE = Path("data/history.json")
 def load_subscriptions():
     """Load subscriptions from JSON file"""
     if SUBSCRIPTIONS_FILE.exists():
-        with open(SUBSCRIPTIONS_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(SUBSCRIPTIONS_FILE, "r") as f:
+                content = f.read().strip()
+                if content:
+                    return json.loads(content)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"⚠️ Error loading subscriptions: {e}. Starting with empty list.")
     return []
 
 def save_subscriptions(subscriptions):
     """Save subscriptions to JSON file"""
+    SUBSCRIPTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(SUBSCRIPTIONS_FILE, "w") as f:
         json.dump(subscriptions, f, indent=2)
 
 def load_history():
     """Load history from JSON file"""
     if HISTORY_FILE.exists():
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                content = f.read().strip()
+                if content:
+                    return json.loads(content)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"⚠️ Error loading history: {e}. Starting with empty list.")
     return []
 
 def save_history(history):
     """Save history to JSON file"""
+    HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(HISTORY_FILE, "w") as f:
         json.dump(history, f, indent=2)
 
@@ -136,9 +148,19 @@ async def root():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global history
+    
     print(f"🔌 New WebSocket connection attempt from {websocket.client}")
     await manager.connect(websocket)
     print(f"✅ WebSocket connected. Total connections: {len(manager.active_connections)}")
+    
+    # Send current history to the new client
+    try:
+        await websocket.send_json({'type': 'history_update', 'history': history})
+        print(f"📤 Sent current history to new client ({len(history)} events)")
+    except Exception as e:
+        print(f"❌ Error sending initial history: {e}")
+    
     try:
         while True:
             # Receive messages from client
@@ -148,7 +170,6 @@ async def websocket_endpoint(websocket: WebSocket):
             
             # Process message and broadcast to all clients
             if message.get('type') == 'clear_history':
-                global history
                 history.clear()
                 save_history(history)
                 await manager.broadcast({'type': 'history_update', 'history': history})
@@ -280,6 +301,29 @@ async def check_subscription(fingerprint: str):
         for sub in subscriptions
     )
     return {"subscribed": is_subscribed}
+
+
+@app.post("/api/clear-subscriptions")
+async def clear_subscriptions():
+    """Clear all subscriptions"""
+    global subscriptions
+    count = len(subscriptions)
+    subscriptions.clear()
+    save_subscriptions(subscriptions)
+    print(f"🗑️ Cleared all subscriptions ({count} removed)")
+    
+    # Add to history and broadcast
+    add_history_event(
+        event_type="subscription",
+        message=f"🗑️ Todas las suscripciones eliminadas",
+        details={
+            "removed": count,
+            "total": 0
+        }
+    )
+    await manager.broadcast({"type": "history_update", "history": history})
+    
+    return {"status": "cleared", "removed": count}
 
 
 @app.post("/api/send-notification")

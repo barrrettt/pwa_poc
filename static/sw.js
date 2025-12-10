@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v3';
+const CACHE_NAME = 'pwa-poc-v4';
 const urlsToCache = [
   '/',
   '/static/manifest.json',
