@@ -56,6 +56,6 @@ Open the ngrok HTTPS URL on your mobile device.
 ## ✅ Features
 
 - PWA with Service Worker
-- Periodic Background Sync (5 min)
+- Periodic Background Sync (heartbeats every 5 min)
 - Push Notifications (hourly)
 - Background activity monitoring

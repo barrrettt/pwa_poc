@@ -15,6 +15,9 @@ import threading
 import time
 from datetime import datetime
 
+# App version
+APP_VERSION = "1.0.0"
+
 # Load environment variables
 load_dotenv()
 
@@ -28,30 +31,25 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"📡 WebSocket connected. Total: {len(self.active_connections)}")
+        print(f"🔌 Cliente conectado. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        print(f"📡 WebSocket disconnected. Total: {len(self.active_connections)}")
+        print(f"🔌 Cliente desconectado. Quedan: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
-        print(f"📤 Broadcasting to {len(self.active_connections)} connections: {message.get('type', 'unknown')}")
         disconnected = []
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
             except Exception as e:
-                print(f"❌ Error broadcasting to websocket: {e}")
                 disconnected.append(connection)
         
         # Remove disconnected connections
         for conn in disconnected:
             if conn in self.active_connections:
                 self.active_connections.remove(conn)
-        
-        if disconnected:
-            print(f"🧹 Cleaned {len(disconnected)} dead connections. Remaining: {len(self.active_connections)}")
 
 manager = ConnectionManager()
 
@@ -172,38 +170,32 @@ async def root():
 async def websocket_endpoint(websocket: WebSocket):
     global history
     
-    print(f"🔌 New WebSocket connection attempt from {websocket.client}")
     await manager.connect(websocket)
-    print(f"✅ WebSocket connected. Total connections: {len(manager.active_connections)}")
     
     # Send current history to the new client
     try:
-        await websocket.send_json({'type': 'history_update', 'history': history})
-        print(f"📤 Sent current history to new client ({len(history)} events)")
+        await websocket.send_json({"type": "history_update", "history": history})
     except Exception as e:
-        print(f"❌ Error sending initial history: {e}")
+        pass  # Client will reconnect if needed
     
     try:
         while True:
             # Receive messages from client
             data = await websocket.receive_text()
             message = json.loads(data)
-            print(f"📨 Received message: {message}")
             
             # Process message and broadcast to all clients
             if message.get('type') == 'clear_history':
                 history.clear()
                 save_history(history)
                 await manager.broadcast({'type': 'history_update', 'history': history})
-                print("🗑️ History cleared and broadcast to all clients")
             
     except WebSocketDisconnect:
-        print(f"🔌 WebSocket disconnect event")
+        pass  # Normal disconnect
     except Exception as e:
-        print(f"❌ WebSocket error: {e}")
+        pass  # Connection error
     finally:
         manager.disconnect(websocket)
-        print(f"🧹 Cleanup complete. Remaining connections: {len(manager.active_connections)}")
 
 
 @app.get("/api/history")
@@ -224,11 +216,7 @@ async def clear_history():
 
 @app.post("/api/test", response_model=TestResponse)
 async def test_endpoint(request: TestRequest):
-    print("=" * 50)
-    print("📡 Test endpoint called")
-    print(f"👤 Fingerprint: {request.fingerprint[:16] if request.fingerprint else 'Unknown'}...")
-    print(f"📊 Current history length: {len(history)}")
-    print(f"🔌 Active WebSocket connections: {len(manager.active_connections)}")
+    print(f"📡 Test - {request.fingerprint[:16] if request.fingerprint else 'Unknown'}...")
     
     # Add to history
     event = add_history_event(
@@ -239,13 +227,9 @@ async def test_endpoint(request: TestRequest):
             "fingerprint": request.fingerprint[:16] if request.fingerprint else "Unknown"
         }
     )
-    print(f"✅ Event added: {event}")
-    print(f"📊 New history length: {len(history)}")
     
     # Broadcast history update
     await manager.broadcast({"type": "history_update", "history": history})
-    print("📤 Broadcast sent to all connections")
-    print("=" * 50)
     
     return {"data": "test ok"}
 
@@ -257,6 +241,12 @@ async def get_vapid_public_key():
     if not public_key:
         raise HTTPException(status_code=500, detail="VAPID public key not configured")
     return {"publicKey": public_key}
+
+
+@app.get("/api/version")
+async def get_version():
+    """Return app version"""
+    return {"version": APP_VERSION}
 
 
 @app.post("/api/heartbeat")
@@ -274,8 +264,6 @@ async def heartbeat(request: TestRequest):
         }
         
         save_background_activity(activity_log)
-        
-        print(f"💓 Heartbeat from {fingerprint[:16]}... at {datetime.now().strftime('%H:%M:%S')}")
         
         return {
             "status": "ok",
@@ -321,7 +309,6 @@ async def get_activity(fingerprint: str):
             "status": status
         }
     except Exception as e:
-        print(f"❌ Error getting activity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -388,7 +375,7 @@ async def check_subscription(fingerprint: str):
         sub.get("device_fingerprint") == fingerprint 
         for sub in subscriptions
     )
-    return {"subscribed": is_subscribed}
+    return {"is_subscribed": is_subscribed}
 
 
 @app.post("/api/clear-subscriptions")
@@ -619,5 +606,6 @@ if __name__ == "__main__":
         app, 
         host="0.0.0.0", 
         port=8000,
-        log_level="info"
+        log_level="warning",
+        access_log=False
     )

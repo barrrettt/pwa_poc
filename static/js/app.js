@@ -93,7 +93,6 @@ function connectWebSocket() {
     
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log('📨 WebSocket message:', data);
         
         // Backend sends history_update with full history
         if (data.type === 'history_update') {
@@ -102,7 +101,6 @@ function connectWebSocket() {
     };
     
     ws.onclose = () => {
-        console.log('🔌 WebSocket disconnected, reconnecting...');
         setTimeout(connectWebSocket, 3000);
     };
     
@@ -113,8 +111,6 @@ function connectWebSocket() {
 
 // Render history from backend data
 function renderHistory(historyData) {
-    console.log('🎨 Rendering history. Items:', historyData.length, historyData);
-    console.trace('🔍 renderHistory called from:');
     historyList.innerHTML = '';
     
     // Update counter in the title
@@ -167,11 +163,43 @@ if ('serviceWorker' in navigator && 'PushManager' in window) {
 
 async function checkSubscription() {
     if (!swRegistration) {
-        console.log('Service Worker not registered yet');
         return;
     }
+    
+    // Check local subscription
     const subscription = await swRegistration.pushManager.getSubscription();
-    isSubscribed = !(subscription === null);
+    const hasLocalSubscription = !(subscription === null);
+    
+    // Check server subscription status
+    try {
+        const response = await fetch(`/api/check-subscription/${deviceFingerprint}`);
+        const data = await response.json();
+        const hasServerSubscription = data.is_subscribed;
+        
+        // If there's a mismatch, sync them
+        if (hasLocalSubscription && !hasServerSubscription) {
+            isSubscribed = false;
+        } else if (!hasLocalSubscription && hasServerSubscription) {
+            // Remove from server since we don't have it locally
+            if (subscription) {
+                await fetch('/api/unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subscription: subscription,
+                        device_fingerprint: deviceFingerprint
+                    })
+                });
+            }
+            isSubscribed = false;
+        } else {
+            isSubscribed = hasLocalSubscription && hasServerSubscription;
+        }
+    } catch (error) {
+        // Fallback to local check only
+        isSubscribed = hasLocalSubscription;
+    }
+    
     updateSubscribeButton();
 }
 
@@ -190,7 +218,6 @@ async function generateDeviceFingerprint() {
     // Check if we have a stored fingerprint in localStorage
     let storedFingerprint = localStorage.getItem('device_fingerprint');
     if (storedFingerprint) {
-        console.log('Using stored fingerprint:', storedFingerprint.substring(0, 16) + '...');
         return storedFingerprint;
     }
     
@@ -283,30 +310,22 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function subscribeToPush() {
+    console.log('🔔 Suscribirse a notificaciones');
     try {
         // Check if notifications are supported
         if (!('Notification' in window)) {
-            console.error('❌ ERROR: Este navegador no soporta notificaciones');
             alert('⚠️ Tu navegador no soporta notificaciones push.\n\nAsegúrate de:\n1. Usar HTTPS (o localhost)\n2. Tener Chrome 90+\n3. Instalar la app como PWA');
             return;
         }
         
-        console.log('🔔 Notification API disponible');
-        console.log('📊 Notification.permission:', Notification.permission);
-        console.log('🌐 window.isSecureContext:', window.isSecureContext);
-        console.log('📱 Display mode:', window.matchMedia('(display-mode: standalone)').matches ? 'PWA' : 'Browser');
-        
         if (!swRegistration) {
-            console.error('❌ ERROR: Service Worker no está registrado');
             return;
         }
         
         // Request notification permission
         const permission = await Notification.requestPermission();
-        console.log('✅ Permission result:', permission);
         
         if (permission !== 'granted') {
-            console.error('ERROR: Permiso de notificaciones denegado');
             return;
         }
         
@@ -393,6 +412,7 @@ subscribeButton.addEventListener('click', () => {
 });
 
 sendNotificationButton.addEventListener('click', async () => {
+    console.log('📨 Enviar notificación');
     try {
         sendNotificationButton.disabled = true;
         sendNotificationButton.textContent = '📤 Enviando...';
@@ -424,6 +444,7 @@ sendNotificationButton.addEventListener('click', async () => {
 const clearSubscriptionsButton = document.getElementById('clearSubscriptionsButton');
 
 clearSubscriptionsButton.addEventListener('click', async () => {
+    console.log('🗑️ Limpiar suscripciones');
     if (!confirm('¿Estás seguro de que quieres borrar TODAS las suscripciones?')) {
         return;
     }
@@ -481,7 +502,8 @@ async function updateActivityMonitor() {
             const minutesAgo = data.minutes_ago;
             
             if (minutesAgo < 1) {
-                activityTime.textContent = 'Hace menos de 1 minuto ✅';
+                const secondsAgo = Math.floor(minutesAgo * 60);
+                activityTime.textContent = `Hace ${secondsAgo} segundo${secondsAgo !== 1 ? 's' : ''} ✅`;
             } else if (minutesAgo < 60) {
                 activityTime.textContent = `Hace ${Math.floor(minutesAgo)} minuto${Math.floor(minutesAgo) > 1 ? 's' : ''}`;
             } else {
@@ -502,7 +524,6 @@ async function updateActivityMonitor() {
             }
         }
     } catch (error) {
-        console.error('Error fetching activity:', error);
         activityTime.textContent = 'Error al consultar';
         activityStatus.textContent = '❌ Error';
         activityStatus.className = 'activity-value inactive';
@@ -520,9 +541,6 @@ activityRefresh.addEventListener('click', async () => {
 
 // Auto-update activity every 60 seconds
 setInterval(updateActivityMonitor, 60000);
-
-// Initial update after 2 seconds (give SW time to send first heartbeat)
-setTimeout(updateActivityMonitor, 2000);
 
 // Function to update diagnostic panel
 function updateDiagnosticPanel() {
@@ -592,31 +610,16 @@ function updateDiagnosticPanel() {
 }
 
 // Initialize Service Worker (at the end after all functions are defined)
-console.log('=' .repeat(60));
-console.log('🔍 DIAGNÓSTICO DE SOPORTE PWA');
-console.log('=' .repeat(60));
-console.log('🌐 URL:', window.location.href);
-console.log('🔒 Secure Context (HTTPS):', window.isSecureContext);
-console.log('📱 Display Mode:', window.matchMedia('(display-mode: standalone)').matches ? 'PWA (Instalada)' : 'Browser');
-console.log('🔔 Notification API:', 'Notification' in window ? 'Disponible' : '❌ NO DISPONIBLE');
-if ('Notification' in window) {
-    console.log('   └─ Permission:', Notification.permission);
-}
-console.log('⚙️ Service Worker API:', 'serviceWorker' in navigator ? 'Disponible' : '❌ NO DISPONIBLE');
-console.log('📲 Push Manager:', 'PushManager' in window ? 'Disponible' : '❌ NO DISPONIBLE');
-console.log('⏰ Periodic Sync:', 'periodicSync' in ServiceWorkerRegistration.prototype ? 'Disponible' : '❌ NO DISPONIBLE');
-console.log('🔧 User Agent:', navigator.userAgent);
-console.log('=' .repeat(60));
+console.log('🚀 PWA POC inicializando...');
 
 // Update diagnostic panel on load
 updateDiagnosticPanel();
 
 if ('serviceWorker' in navigator) {
-    console.log('✅ Service Workers supported. Secure context:', window.isSecureContext);
+    console.log('✅ Service Worker inicializado');
     
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then(registration => {
-            console.log('✅ Service Worker registered:', registration);
             swRegistration = registration;
             
             // Update diagnostic panel
@@ -630,12 +633,11 @@ if ('serviceWorker' in navigator) {
             registerPeriodicSync();
         })
         .catch(error => {
-            console.error('❌ Error registering Service Worker:', error);
+            console.error('❌ Error registrando Service Worker:', error);
             updateDiagnosticPanel();
         });
 } else {
-    const reason = !window.isSecureContext ? '(Requiere HTTPS o localhost)' : '(Navegador no compatible)';
-    console.error('❌ Service Workers not supported', reason);
+    console.error('❌ Service Workers no soportado');
 }
 
 // Register Periodic Background Sync for heartbeat
@@ -651,40 +653,33 @@ async function registerPeriodicSync() {
                 name: 'periodic-background-sync',
             });
             
-            console.log('⏰ Periodic sync permission:', status.state);
-            
             // Update diagnostic based on permission
             if (status.state === 'granted') {
-                // Register periodic sync every 5 minutes (300000 ms)
+                // Register periodic sync every 10 seconds
                 await registration.periodicSync.register('heartbeat-sync', {
-                    minInterval: 5 * 60 * 1000  // 5 minutes
+                    minInterval: 10 * 1000  // 10 seconds
                 });
-                console.log('✅ Periodic sync registered: heartbeat every 5 minutes');
                 
                 // Check registered syncs
                 const tags = await registration.periodicSync.getTags();
-                console.log('📋 Registered periodic syncs:', tags);
                 
-                diagPeriodicSync.textContent = '✅ Activo (5 min)';
+                diagPeriodicSync.textContent = '✅ Activo (10s)';
                 diagPeriodicSync.className = 'diagnostic-value success';
+                
+                // Start fallback anyway since Periodic Sync might not work in browser mode
+                startFrontendHeartbeat();
             } else if (status.state === 'prompt') {
                 diagPeriodicSync.textContent = '⚠️ Pendiente';
                 diagPeriodicSync.className = 'diagnostic-value warning';
-                console.warn('⚠️ Periodic sync permission pending');
-                console.log('💡 Starting frontend heartbeat fallback');
                 startFrontendHeartbeat();
             } else {
                 diagPeriodicSync.textContent = '❌ Denegado';
                 diagPeriodicSync.className = 'diagnostic-value error';
-                console.warn('⚠️ Periodic sync permission denied');
-                console.log('💡 Starting frontend heartbeat fallback');
                 startFrontendHeartbeat();
             }
         } else {
             diagPeriodicSync.textContent = '❌ No soportado';
             diagPeriodicSync.className = 'diagnostic-value error';
-            console.warn('⚠️ Periodic Background Sync not supported');
-            console.log('💡 Fallback: Starting frontend interval for heartbeat');
             startFrontendHeartbeat();
         }
     } catch (error) {
@@ -698,18 +693,21 @@ async function registerPeriodicSync() {
 
 // Fallback: Frontend heartbeat with setInterval (only works when app is open)
 function startFrontendHeartbeat() {
-    console.log('🔄 Starting frontend heartbeat fallback (every 5 minutes)');
-    
     // Send initial heartbeat
     sendFrontendHeartbeat();
     
     // Set interval for subsequent heartbeats
-    setInterval(sendFrontendHeartbeat, 5 * 60 * 1000); // Every 5 minutes
+    setInterval(sendFrontendHeartbeat, 10 * 1000); // Every 10 seconds
 }
 
 async function sendFrontendHeartbeat() {
+    if (!deviceFingerprint) {
+        console.log('⏳ Esperando fingerprint...');
+        return;
+    }
+    
     try {
-        console.log('💓 Frontend: Sending heartbeat...', deviceFingerprint.substring(0, 16) + '...');
+        console.log('💓 Heartbeat');
         
         const response = await fetch('/api/heartbeat', {
             method: 'POST',
@@ -721,12 +719,11 @@ async function sendFrontendHeartbeat() {
         
         if (response.ok) {
             const data = await response.json();
-            console.log('✅ Frontend: Heartbeat sent:', data.registered_at);
         } else {
-            console.error('❌ Frontend: Heartbeat failed:', response.status);
+            // Silent fail
         }
     } catch (error) {
-        console.error('❌ Frontend: Error sending heartbeat:', error);
+        // Silent fail
     }
 }
 
@@ -734,7 +731,6 @@ async function sendFrontendHeartbeat() {
 (async function init() {
     // Generate device fingerprint
     deviceFingerprint = await generateDeviceFingerprint();
-    console.log('🔑 Device fingerprint initialized:', deviceFingerprint.substring(0, 16) + '...');
     
     // Display fingerprint in UI
     const fingerprintValueEl = document.getElementById('fingerprintValue');
@@ -743,6 +739,21 @@ async function sendFrontendHeartbeat() {
         fingerprintValueEl.title = deviceFingerprint; // Full fingerprint on hover
     }
     
+    // Fetch and display app version
+    try {
+        const response = await fetch('/api/version');
+        const data = await response.json();
+        const versionEl = document.getElementById('appVersion');
+        if (versionEl) {
+            versionEl.textContent = `v${data.version}`;
+        }
+    } catch (error) {
+        console.error('Error fetching version:', error);
+    }
+    
     // Connect WebSocket (after all functions are defined)
     connectWebSocket();
+    
+    // Start activity monitor after fingerprint is ready
+    setTimeout(updateActivityMonitor, 2000);
 })();
