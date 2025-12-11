@@ -2,6 +2,8 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(102, 126, 234, 0.5) transparent;
 }
 
 /* Custom Scrollbar Styles - Modern Design */
@@ -34,14 +36,6 @@
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5);
-}
-
-::-webkit-scrollbar-thumb:active {
-    background: rgba(255, 255, 255, 0.7);
-}
-
 /* Force remove scrollbar buttons/arrows */
 ::-webkit-scrollbar-button:start:decrement,
 ::-webkit-scrollbar-button:end:increment {
@@ -53,12 +47,6 @@
 
 ::-webkit-scrollbar-corner {
     background: transparent;
-}
-
-/* Firefox Scrollbar */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(102, 126, 234, 0.5) transparent;
 }
 
 body {

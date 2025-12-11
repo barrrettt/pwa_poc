@@ -192,7 +192,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
     except WebSocketDisconnect:
         pass  # Normal disconnect
-    except Exception as e:
+    except Exception:
         pass  # Connection error
     finally:
         manager.disconnect(websocket)
@@ -337,7 +337,7 @@ async def subscribe(subscription: PushSubscription):
     ]
     
     # Add new subscription
-    subscriptions.append(subscription.dict())
+    subscriptions.append(subscription.model_dump())
     save_subscriptions(subscriptions)
     print(f"✅ New subscription from device: {subscription.device_fingerprint[:16]}...")
     print(f"📊 Total subscriptions: {len(subscriptions)}")
