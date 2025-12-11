@@ -16,7 +16,7 @@ import time
 from datetime import datetime
 
 # App version
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.4"
 
 # Load environment variables
 load_dotenv()
