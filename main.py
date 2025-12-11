@@ -128,8 +128,8 @@ def add_history_event(event_type: str, message: str, details: dict = None):
     }
     print(f"🔵 Adding event to history: {event_type} - {message}")
     history.append(event)
-    # Keep only last 50 events
-    if len(history) > 50:
+    # Keep only last 1000 events
+    if len(history) > 1000:
         history.pop(0)
     save_history(history)
     print(f"💾 History saved. Total events: {len(history)}")
@@ -199,9 +199,24 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @app.get("/api/history")
-async def get_history():
-    """Get current history"""
-    return {"history": history}
+async def get_history(page: int = 1, limit: int = 5):
+    """Get paginated history"""
+    # Calculate pagination
+    total = len(history)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    
+    # Return events in reverse order (newest first) and paginate
+    reversed_history = list(reversed(history))
+    paginated_history = reversed_history[start_idx:end_idx]
+    
+    return {
+        "history": paginated_history,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "hasMore": end_idx < total
+    }
 
 
 @app.post("/api/history/clear")
@@ -503,15 +518,16 @@ async def service_worker():
 
 # Background thread for periodic notifications
 def send_inactivity_notifications():
-    """Send periodic notifications every 1 hour"""
+    """Send periodic notifications every 10 minutes"""
     # Load env variables in thread context
     from dotenv import load_dotenv
     load_dotenv()
     
+    # Wait 30 seconds before first notification (give time for subscriptions)
+    time.sleep(30)
+    
     while True:
         try:
-            time.sleep(60 * 60)  # 1 hour in seconds
-            
             print("=" * 50)
             print("⏰ Sending periodic backend notifications...")
             print(f"🕐 Time: {datetime.now().strftime('%H:%M:%S')}")
@@ -520,6 +536,7 @@ def send_inactivity_notifications():
             
             if not subscriptions:
                 print("⚠️ No subscribers for periodic notifications")
+                time.sleep(10 * 60)  # Wait 10 minutes before checking again
                 continue
             
             vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
@@ -577,6 +594,9 @@ def send_inactivity_notifications():
             
         except Exception as e:
             print(f"❌ Error in periodic notification thread: {e}")
+        
+        # Wait 10 minutes before next notification
+        time.sleep(10 * 60)
 
 
 if __name__ == "__main__":
@@ -594,7 +614,7 @@ if __name__ == "__main__":
     print("🧵 Starting periodic notification thread...")
     inactivity_thread = threading.Thread(target=send_inactivity_notifications, daemon=True)
     inactivity_thread.start()
-    print("✅ Periodic notification thread started (will send every 1 hour)")
+    print("✅ Periodic notification thread started (will send every 10 minutes)")
     
     print("🚀 Server starting...")
     print("📱 Local: http://localhost:8000")

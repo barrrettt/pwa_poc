@@ -4,6 +4,63 @@
     box-sizing: border-box;
 }
 
+/* Custom Scrollbar Styles - Modern Design */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.4), rgba(118, 75, 162, 0.4));
+    border-radius: 100px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.7), rgba(118, 75, 162, 0.7));
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* Force remove scrollbar buttons/arrows */
+::-webkit-scrollbar-button:start:decrement,
+::-webkit-scrollbar-button:end:increment {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Firefox Scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(102, 126, 234, 0.5) transparent;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -296,10 +353,25 @@ h1 {
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     transition: transform 0.2s;
     margin-right: 5px;
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
 }
 
 .history-item:hover {
     transform: translateX(5px);
+}
+
+.event-number {
+    font-weight: bold;
+    color: #667eea;
+    font-size: 1.2em;
+    min-width: 35px;
+    flex-shrink: 0;
+}
+
+.event-content {
+    flex: 1;
 }
 
 .event-name {
@@ -320,6 +392,30 @@ h1 {
     color: #999;
     padding: 30px;
     font-style: italic;
+}
+
+.loading-indicator {
+    text-align: center;
+    color: #667eea;
+    padding: 20px;
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .scroll-to-top {
