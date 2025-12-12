@@ -20,7 +20,7 @@ from datetime import datetime
 from back_modules import webpush_handler, fcm_handler
 
 # App version
-APP_VERSION = "1.0.17"
+APP_VERSION = "1.0.18"
 
 # Load environment variables
 load_dotenv()
@@ -458,7 +458,11 @@ if __name__ == "__main__":
     
     # Start periodic notification thread (WebPush)
     print("🧵 Starting periodic WebPush notification thread...")
-    periodic_thread = threading.Thread(target=webpush_handler.send_periodic_notifications, daemon=True)
+    periodic_thread = threading.Thread(
+        target=webpush_handler.send_periodic_notifications, 
+        args=(add_history_event, broadcast_history),
+        daemon=True
+    )
     periodic_thread.start()
     print("✅ Periodic notification thread started (will send every 10 minutes)")
     

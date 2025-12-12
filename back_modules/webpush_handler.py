@@ -13,6 +13,9 @@ router = APIRouter()
 # Data file
 SUBSCRIPTIONS_FILE = Path("data/subscriptions.json")
 
+# Notification interval configuration (in minutes)
+NOTIFICATION_INTERVAL_MINUTES = 60  # Change this value to adjust notification frequency
+
 # Global variable to track next periodic notification time
 next_periodic_notification_time = None
 
@@ -237,8 +240,8 @@ async def send_notification(payload: NotificationPayload, add_history_callback=N
     }
 
 
-def send_periodic_notifications():
-    """Send periodic notifications every 10 minutes (both WebPush and FCM)"""
+def send_periodic_notifications(add_history_callback=None, broadcast_callback=None):
+    """Send periodic notifications (both WebPush and FCM) - interval configured in NOTIFICATION_INTERVAL_MINUTES"""
     global next_periodic_notification_time
     from dotenv import load_dotenv
     from firebase_admin import messaging
@@ -269,12 +272,13 @@ def send_periodic_notifications():
             webpush_failed = 0
             
             if current_subscriptions and vapid_private_key:
+                current_time = datetime.now().strftime('%H:%M:%S')
                 notification_data = {
                     "title": "⏰📡 WebPush - Notificación Periódica",
-                    "body": "Mensaje automático enviado desde BACK (backend)",
+                    "body": f"Mensaje automático enviado desde BACK (backend) a las {current_time}",
                     "icon": "/static/icon-192.png",
                     "badge": "/static/icon-192.png",
-                    "tag": f"backend-periodic-{int(time.time())}",
+                    "tag": f"webpush-periodic-{int(time.time())}",
                     "timestamp": int(time.time() * 1000)
                 }
                 
@@ -307,6 +311,23 @@ def send_periodic_notifications():
                         webpush_failed += 1
                 
                 print(f"📊 WebPush results: Sent={webpush_sent}, Failed={webpush_failed}")
+                
+                # Add event to history always
+                if add_history_callback and broadcast_callback:
+                    try:
+                        event = add_history_callback(
+                            "webpush_periodic",
+                            f"⏰📡 Notificación periódica WebPush enviada a {webpush_sent} dispositivo(s)"
+                        )
+                        # Broadcast to all connected clients
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(broadcast_callback())
+                        loop.close()
+                        print(f"✅ Event added to history for WebPush periodic notification")
+                    except Exception as e:
+                        print(f"⚠️ Could not add WebPush event to history: {e}")
             else:
                 print("⚠️ No WebPush subscribers or VAPID key not configured")
             
@@ -332,12 +353,14 @@ def send_periodic_notifications():
                         
                         print(f"📤 Sending FCM to device {idx + 1}/{len(fcm_tokens)}: {token_data.get('device_fingerprint', 'unknown')[:16]}...")
                         
+                        current_time = datetime.now().strftime('%H:%M:%S')
                         message = messaging.Message(
                             data={
                                 "title": "⏰🔥 FCM - Notificación Periódica",
-                                "body": "Mensaje automático enviado desde BACK (backend)",
+                                "body": f"Mensaje automático enviado desde BACK (backend) a las {current_time}",
                                 "icon": "/static/icon-192.png",
-                                "badge": "/static/icon-192.png"
+                                "badge": "/static/icon-192.png",
+                                "tag": f"fcm-periodic-{int(time.time())}"
                             },
                             token=token,
                             webpush=messaging.WebpushConfig(
@@ -361,6 +384,23 @@ def send_periodic_notifications():
                         fcm_failed += 1
                 
                 print(f"📊 FCM results: Sent={fcm_sent}, Failed={fcm_failed}")
+                
+                # Add event to history always
+                if add_history_callback and broadcast_callback:
+                    try:
+                        event = add_history_callback(
+                            "fcm_periodic",
+                            f"⏰🔥 Notificación periódica FCM enviada a {fcm_sent} dispositivo(s)"
+                        )
+                        # Broadcast to all connected clients
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(broadcast_callback())
+                        loop.close()
+                        print(f"✅ Event added to history for FCM periodic notification")
+                    except Exception as e:
+                        print(f"⚠️ Could not add FCM event to history: {e}")
             else:
                 print("⚠️ No FCM subscribers")
             
@@ -369,9 +409,14 @@ def send_periodic_notifications():
             
         except Exception as e:
             print(f"❌ Error in periodic notification thread: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # Set next notification time (10 minutes from now)
-        next_periodic_notification_time = time.time() + (10 * 60)
+        # Set next notification time
+        next_periodic_notification_time = time.time() + (NOTIFICATION_INTERVAL_MINUTES * 60)
+        interval_text = f"{NOTIFICATION_INTERVAL_MINUTES} minute{'s' if NOTIFICATION_INTERVAL_MINUTES != 1 else ''}"
+        print(f"\n⏰ Next notification scheduled in {interval_text} at {datetime.fromtimestamp(next_periodic_notification_time).strftime('%H:%M:%S')}")
+        print(f"💤 Sleeping for {interval_text}...\n")
         
-        # Wait 10 minutes before next notification
-        time.sleep(10 * 60)
+        # Wait before next notification
+        time.sleep(NOTIFICATION_INTERVAL_MINUTES * 60)

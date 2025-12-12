@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v26';
+const CACHE_NAME = 'pwa-poc-v28';
 const urlsToCache = [];
 
 // ⚠️ NO CACHING ENABLED - All requests go to network
@@ -36,12 +36,18 @@ messaging.onBackgroundMessage((payload) => {
   const data = payload.data || {};
   const notification = payload.notification || {};
   
+  console.log('📬 SW: Extracted data object:', JSON.stringify(data));
+  console.log('📬 SW: data.title:', data.title);
+  console.log('📬 SW: data.body:', data.body);
+  console.log('📬 SW: data.tag:', data.tag);
+  
   const notificationTitle = data.title || notification.title || 'New notification';
   const notificationOptions = {
     body: data.body || notification.body || 'No body',
     icon: data.icon || notification.icon || notification.image || '/static/icon-192.png',
     badge: data.badge || '/static/icon-192.png',
-    tag: data.tag || 'fcm-notification',
+    tag: data.tag || `fcm-${Date.now()}`, // Use unique tag if not provided
+    vibrate: [200, 100, 200],
     data: data
   };
   
