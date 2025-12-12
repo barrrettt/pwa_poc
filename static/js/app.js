@@ -161,9 +161,8 @@ function renderHistory(historyData) {
         const eventNumber = index + 1; // New events are numbered from 1
         
         historyItem.innerHTML = `
-            <div class="event-number">${eventNumber}.</div>
             <div class="event-content">
-                <div class="event-name">${event.type}</div>
+                <div class="event-name">${eventNumber}. ${event.type}</div>
                 <div class="event-details">
                     ${event.message}<br>
                     ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
@@ -233,9 +232,8 @@ async function loadHistoryPage() {
             const eventNumber = (currentPage - 1) * 5 + index + 1;
             
             historyItem.innerHTML = `
-                <div class="event-number">${eventNumber}.</div>
                 <div class="event-content">
-                    <div class="event-name">${event.type}</div>
+                    <div class="event-name">${eventNumber}. ${event.type}</div>
                     <div class="event-details">
                         ${event.message}<br>
                         ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
@@ -600,6 +598,211 @@ sendNotificationButton.addEventListener('click', async () => {
     }
 });
 
+// Firebase FCM Subscribe functionality
+const subscribeFCMButton = document.getElementById('subscribeFCMButton');
+const clearFCMSubscriptionsButton = document.getElementById('clearFCMSubscriptionsButton');
+const sendFCMButton = document.getElementById('sendFCMButton');
+
+let isSubscribedFCM = false;
+let currentFCMToken = null;
+
+// Check FCM subscription status on load
+async function checkFCMSubscriptionStatus() {
+    try {
+        const response = await fetch(`/api/fcm/check-subscription/${deviceFingerprint}`);
+        const data = await response.json();
+        isSubscribedFCM = data.is_subscribed;
+        updateSubscribeFCMButton();
+    } catch (error) {
+        console.error('Error checking FCM subscription:', error);
+    }
+}
+
+function updateSubscribeFCMButton() {
+    if (isSubscribedFCM) {
+        subscribeFCMButton.textContent = '🔥 Desuscribirse (FCM)';
+        subscribeFCMButton.style.background = 'linear-gradient(135deg, #D32F2F 0%, #C62828 100%)';
+    } else {
+        subscribeFCMButton.textContent = '🔥 Suscribirse (FCM)';
+        subscribeFCMButton.style.background = 'linear-gradient(135deg, #FF6F00 0%, #FFA000 100%)';
+    }
+}
+
+async function subscribeToFCM() {
+    console.log('🔥 Subscribing to Firebase FCM...');
+    
+    if (!window.firebaseMessaging) {
+        alert('❌ Firebase no está inicializado todavía. Espera un momento.');
+        return;
+    }
+    
+    try {
+        subscribeFCMButton.disabled = true;
+        subscribeFCMButton.textContent = '⏳ Suscribiendo...';
+        
+        // Request notification permission
+        const permission = await Notification.requestPermission();
+        
+        if (permission !== 'granted') {
+            alert('❌ Necesitas aceptar las notificaciones');
+            subscribeFCMButton.disabled = false;
+            updateSubscribeFCMButton();
+            return;
+        }
+        
+        // Get FCM token
+        const token = await window.getFirebaseToken(window.firebaseMessaging, {
+            vapidKey: window.firebaseVapidKey,
+            serviceWorkerRegistration: swRegistration
+        });
+        
+        if (token) {
+            console.log('✅ FCM Token:', token);
+            currentFCMToken = token;
+            
+            // Send token to backend
+            const response = await fetch('/api/fcm/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    token: token,
+                    device_fingerprint: deviceFingerprint
+                })
+            });
+            
+            const result = await response.json();
+            console.log('✅ FCM subscription registered:', result);
+            
+            // Listen for foreground messages (only log, SW will show notification)
+            window.onFirebaseMessage(window.firebaseMessaging, (payload) => {
+                console.log('📬 Foreground FCM message received:', payload);
+                // Don't show notification here - let SW handle it
+            });
+            
+            isSubscribedFCM = true;
+            updateSubscribeFCMButton();
+            
+        } else {
+            console.error('❌ No registration token available');
+            alert('❌ No se pudo obtener el token FCM');
+        }
+        
+    } catch (error) {
+        console.error('❌ FCM subscription error:', error);
+        alert('❌ Error al suscribirse: ' + error.message);
+    } finally {
+        subscribeFCMButton.disabled = false;
+        if (!isSubscribedFCM) {
+            updateSubscribeFCMButton();
+        }
+    }
+}
+
+async function unsubscribeFromFCM() {
+    console.log('🔥 Unsubscribing from Firebase FCM...');
+    
+    try {
+        subscribeFCMButton.disabled = true;
+        subscribeFCMButton.textContent = '⏳ Desuscribiendo...';
+        
+        // Send unsubscribe request to backend
+        const response = await fetch('/api/fcm/unsubscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                token: currentFCMToken || '',
+                device_fingerprint: deviceFingerprint
+            })
+        });
+        
+        const result = await response.json();
+        console.log('✅ FCM unsubscription:', result);
+        
+        currentFCMToken = null;
+        isSubscribedFCM = false;
+        updateSubscribeFCMButton();
+        
+    } catch (error) {
+        console.error('❌ FCM unsubscription error:', error);
+        alert('❌ Error al desuscribirse: ' + error.message);
+    } finally {
+        subscribeFCMButton.disabled = false;
+    }
+}
+
+subscribeFCMButton.addEventListener('click', () => {
+    if (isSubscribedFCM) {
+        unsubscribeFromFCM();
+    } else {
+        subscribeToFCM();
+    }
+});
+
+clearFCMSubscriptionsButton.addEventListener('click', async () => {
+    if (!confirm('¿Borrar todas las suscripciones FCM del servidor?')) {
+        return;
+    }
+    
+    try {
+        clearFCMSubscriptionsButton.disabled = true;
+        clearFCMSubscriptionsButton.textContent = '⏳ Borrando...';
+        
+        const response = await fetch('/api/fcm/clear-subscriptions', {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        console.log('✅ FCM subscriptions cleared:', result);
+        
+        // Update local state
+        isSubscribedFCM = false;
+        currentFCMToken = null;
+        updateSubscribeFCMButton();
+        
+    } catch (error) {
+        console.error('❌ Error clearing FCM subscriptions:', error);
+        alert('❌ Error al borrar suscripciones: ' + error.message);
+    } finally {
+        clearFCMSubscriptionsButton.disabled = false;
+        clearFCMSubscriptionsButton.textContent = '🗑️ Borrar Subs (FCM)';
+    }
+});
+
+sendFCMButton.addEventListener('click', async () => {
+    console.log('📨 Sending FCM notification...');
+    
+    try {
+        sendFCMButton.disabled = true;
+        sendFCMButton.textContent = '📤 Enviando...';
+        
+        const response = await fetch('/api/fcm/send', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                title: '🔥 Firebase FCM Test',
+                body: `FCM notification sent at ${new Date().toLocaleTimeString()}`,
+                icon: '/static/icon-192.png'
+            })
+        });
+        
+        const result = await response.json();
+        console.log('✅ FCM notification sent:', result);
+        
+    } catch (error) {
+        console.error('❌ FCM send error:', error);
+        alert('❌ Error al enviar: ' + error.message);
+    } finally {
+        sendFCMButton.disabled = false;
+        sendFCMButton.textContent = '📨 Enviar FCM';
+    }
+});
+
 // Clear subscriptions functionality
 const clearSubscriptionsButton = document.getElementById('clearSubscriptionsButton');
 
@@ -928,6 +1131,9 @@ async function sendFrontendHeartbeat() {
     
     // Setup infinite scroll
     setupInfiniteScroll();
+    
+    // Check FCM subscription status
+    checkFCMSubscriptionStatus();
     
     // Start activity monitor after fingerprint is ready
     setTimeout(updateActivityMonitor, 2000);

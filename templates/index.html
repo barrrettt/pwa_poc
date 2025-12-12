@@ -37,12 +37,17 @@
             <span class="fingerprint-value" id="fingerprintValue">Generando...</span>
         </div>
         
-        <!-- Row 1: Test Button -->
+        <!-- Test Backend API -->
         <button class="test-button" id="testButton">
-            🧪 Test Endpoint
+            🧪 Test Back API
         </button>
         
-        <!-- Row 2: Subscribe and Clear Subscriptions -->
+        <!-- Section Separator -->
+        <div style="margin: 20px 0; border-top: 2px solid rgba(255,255,255,0.2);"></div>
+        
+        <!-- WebPush Section -->
+        <h3 style="color: rgba(255,255,255,0.95); text-align: center; margin-bottom: 15px; font-size: 1.1em; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); font-weight: bold;">📡 WebPush (VAPID)</h3>
+        
         <div class="button-row">
             <button class="test-button" id="subscribeButton" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">
                 🔔 Suscribirse
@@ -53,10 +58,32 @@
             </button>
         </div>
         
-        <!-- Row 3: Send Notification -->
         <button class="test-button" id="sendNotificationButton" style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);">
-            📬 Enviar Notificación de Prueba
+            📬 Enviar (WebPush)
         </button>
+        
+        <!-- Section Separator -->
+        <div style="margin: 20px 0; border-top: 2px solid rgba(255,255,255,0.2);"></div>
+        
+        <!-- Firebase FCM Section -->
+        <h3 style="color: rgba(255,255,255,0.95); text-align: center; margin-bottom: 15px; font-size: 1.1em; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); font-weight: bold;">🔥 Firebase Cloud Messaging</h3>
+        
+        <div class="button-row">
+            <button class="test-button" id="subscribeFCMButton" style="background: linear-gradient(135deg, #FF6F00 0%, #FFA000 100%);">
+                🔥 Suscribirse (FCM)
+            </button>
+            
+            <button class="test-button" id="clearFCMSubscriptionsButton" style="background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);">
+                🗑️ Borrar Subs (FCM)
+            </button>
+        </div>
+        
+        <button class="test-button" id="sendFCMButton" style="background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);">
+            📨 Enviar (FCM)
+        </button>
+        
+        <!-- Section Separator -->
+        <div style="margin: 20px 0; border-top: 2px solid rgba(255,255,255,0.2);"></div>
         
         <!-- Diagnostic Panel -->
         <div class="diagnostic-panel" id="diagnosticPanel">
@@ -112,6 +139,9 @@
     </div>
     
     <button class="scroll-to-top" id="scrollToTop">↑</button>
+    
+    <!-- Firebase SDK -->
+    <script type="module" src="/static/js/firebase-config.js"></script>
     
     <script src="/static/js/app.js"></script>
 </body>

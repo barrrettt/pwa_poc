@@ -1,10 +1,48 @@
-const CACHE_NAME = 'pwa-poc-v19';
+const CACHE_NAME = 'pwa-poc-v22';
 const urlsToCache = [
   '/',
   '/static/manifest.json',
   '/static/icon-192.png',
-  '/static/icon-512.png'
+  '/static/icon-512.png',
+  '/static/js/firebase-config.js'
 ];
+
+// Firebase configuration for SW
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+
+// Firebase config object
+const firebaseConfig = {
+  apiKey: "AIzaSyAXfasYzYVL-zCArx_agaYPwctWq8RwThY",
+  authDomain: "barret-firebase.firebaseapp.com",
+  projectId: "barret-firebase",
+  storageBucket: "barret-firebase.firebasestorage.app",
+  messagingSenderId: "340392912968",
+  appId: "1:340392912968:web:3c60652e1347853ac1107d",
+  measurementId: "G-5260Q382VC"
+};
+
+// Initialize Firebase in Service Worker
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
+
+// Handle background messages from FCM
+messaging.onBackgroundMessage((payload) => {
+  console.log('📬 SW: Background FCM message received:', payload);
+  
+  const notificationTitle = payload.notification?.title || 'New notification';
+  const notificationOptions = {
+    body: payload.notification?.body || '',
+    icon: payload.notification?.icon || '/static/icon-192.png',
+    badge: '/static/icon-192.png',
+    tag: payload.data?.tag || 'fcm-notification',
+    data: payload.data
+  };
+  
+  return self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+console.log('🔥 SW: Firebase messaging initialized');
 
 // Install event - cache resources
 self.addEventListener('install', event => {

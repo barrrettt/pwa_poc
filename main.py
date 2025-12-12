@@ -1,27 +1,43 @@
+"""
+PWA POC - Main Application
+Clean main file with modular push notification handlers
+"""
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from pywebpush import webpush, WebPushException
 from dotenv import load_dotenv
 import os
 import json
-import base64
 from pathlib import Path
 import logging
-import asyncio
 from typing import List
 import threading
 import time
 from datetime import datetime
 
+# Import push notification modules
+from back_modules import webpush_handler, fcm_handler
+
 # App version
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 
 # Load environment variables
 load_dotenv()
 
+# Initialize Firebase
+fcm_handler.init_firebase()
+
+# Initialize FastAPI
 app = FastAPI()
+
+# Serve static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Data files
+HISTORY_FILE = Path("data/history.json")
+BACKGROUND_ACTIVITY_FILE = Path("data/background_activity.json")
+
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -43,7 +59,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
-            except Exception as e:
+            except Exception:
                 disconnected.append(connection)
         
         # Remove disconnected connections
@@ -51,36 +67,20 @@ class ConnectionManager:
             if conn in self.active_connections:
                 self.active_connections.remove(conn)
 
+
 manager = ConnectionManager()
 
-app = FastAPI()
 
-# Servir archivos estáticos
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Data models
+class TestRequest(BaseModel):
+    fingerprint: str = ""
 
-# Data files
-SUBSCRIPTIONS_FILE = Path("data/subscriptions.json")
-HISTORY_FILE = Path("data/history.json")
-BACKGROUND_ACTIVITY_FILE = Path("data/background_activity.json")
 
-def load_subscriptions():
-    """Load subscriptions from JSON file"""
-    if SUBSCRIPTIONS_FILE.exists():
-        try:
-            with open(SUBSCRIPTIONS_FILE, "r") as f:
-                content = f.read().strip()
-                if content:
-                    return json.loads(content)
-        except (json.JSONDecodeError, Exception) as e:
-            print(f"⚠️ Error loading subscriptions: {e}. Starting with empty list.")
-    return []
+class TestResponse(BaseModel):
+    data: str
 
-def save_subscriptions(subscriptions):
-    """Save subscriptions to JSON file"""
-    SUBSCRIPTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(SUBSCRIPTIONS_FILE, "w") as f:
-        json.dump(subscriptions, f, indent=2)
 
+# Helper functions
 def load_history():
     """Load history from JSON file"""
     if HISTORY_FILE.exists():
@@ -93,11 +93,13 @@ def load_history():
             print(f"⚠️ Error loading history: {e}. Starting with empty list.")
     return []
 
-def save_history(history):
+
+def save_history(history_data):
     """Save history to JSON file"""
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(HISTORY_FILE, "w") as f:
-        json.dump(history, f, indent=2)
+        json.dump(history_data, f, indent=2)
+
 
 def load_background_activity():
     """Load background activity log from JSON file"""
@@ -111,15 +113,16 @@ def load_background_activity():
             print(f"⚠️ Error loading background activity: {e}. Starting with empty dict.")
     return {}
 
+
 def save_background_activity(activity_log):
     """Save background activity log to JSON file"""
     BACKGROUND_ACTIVITY_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(BACKGROUND_ACTIVITY_FILE, "w") as f:
         json.dump(activity_log, f, indent=2)
 
+
 def add_history_event(event_type: str, message: str, details: dict = None):
     """Add event to history and broadcast to all clients"""
-    import time
     event = {
         "type": event_type,
         "message": message,
@@ -135,36 +138,54 @@ def add_history_event(event_type: str, message: str, details: dict = None):
     print(f"💾 History saved. Total events: {len(history)}")
     return event
 
+
+async def broadcast_history():
+    """Broadcast history update to all connected clients"""
+    await manager.broadcast({"type": "history_update", "history": history})
+
+
 # Load data on startup
-subscriptions = load_subscriptions()
 history = load_history()
 
 
-class TestResponse(BaseModel):
-    data: str
-
-
-class PushSubscription(BaseModel):
-    endpoint: str
-    keys: dict
-    device_fingerprint: str  # Unique device identifier
-
-
-class NotificationPayload(BaseModel):
-    title: str
-    body: str
-    icon: str = "/static/icon-192.png"
-
-
-class TestRequest(BaseModel):
-    fingerprint: str = ""
-
+# ============================================================================
+# COMMON ROUTES
+# ============================================================================
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open("templates/index.html", "r", encoding="utf-8") as f:
         return f.read()
 
+
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse("static/manifest.json")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse("static/sw.js", media_type="application/javascript")
+
+
+@app.get("/api/version")
+async def get_version():
+    """Return app version"""
+    return {"version": APP_VERSION}
+
+
+@app.get("/api/vapid-public-key")
+async def get_vapid_public_key():
+    """Return the VAPID public key for push subscription"""
+    public_key = os.getenv("VAPID_PUBLIC_KEY")
+    if not public_key:
+        raise HTTPException(status_code=500, detail="VAPID public key not configured")
+    return {"publicKey": public_key}
+
+
+# ============================================================================
+# WEBSOCKET
+# ============================================================================
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -175,7 +196,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # Send current history to the new client
     try:
         await websocket.send_json({"type": "history_update", "history": history})
-    except Exception as e:
+    except Exception:
         pass  # Client will reconnect if needed
     
     try:
@@ -198,10 +219,13 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
+# ============================================================================
+# HISTORY API
+# ============================================================================
+
 @app.get("/api/history")
 async def get_history(page: int = 1, limit: int = 5):
     """Get paginated history"""
-    # Calculate pagination
     total = len(history)
     start_idx = (page - 1) * limit
     end_idx = start_idx + limit
@@ -229,12 +253,16 @@ async def clear_history():
     return {"status": "cleared"}
 
 
+# ============================================================================
+# TEST ENDPOINT
+# ============================================================================
+
 @app.post("/api/test", response_model=TestResponse)
 async def test_endpoint(request: TestRequest):
     print(f"📡 Test - {request.fingerprint[:16] if request.fingerprint else 'Unknown'}...")
     
     # Add to history
-    event = add_history_event(
+    add_history_event(
         "test", 
         "🧪 Test endpoint called", 
         {
@@ -249,20 +277,9 @@ async def test_endpoint(request: TestRequest):
     return {"data": "test ok"}
 
 
-@app.get("/api/vapid-public-key")
-async def get_vapid_public_key():
-    """Return the VAPID public key for push subscription"""
-    public_key = os.getenv("VAPID_PUBLIC_KEY")
-    if not public_key:
-        raise HTTPException(status_code=500, detail="VAPID public key not configured")
-    return {"publicKey": public_key}
-
-
-@app.get("/api/version")
-async def get_version():
-    """Return app version"""
-    return {"version": APP_VERSION}
-
+# ============================================================================
+# BACKGROUND ACTIVITY (SERVICE WORKER HEARTBEAT)
+# ============================================================================
 
 @app.post("/api/heartbeat")
 async def heartbeat(request: TestRequest):
@@ -327,282 +344,74 @@ async def get_activity(fingerprint: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# WEBPUSH ROUTES (from webpush_handler module)
+# ============================================================================
+
+# Mount WebPush routes with history callbacks
 @app.post("/api/subscribe")
-async def subscribe(subscription: PushSubscription):
-    """Store push subscription"""
-    # Remove old subscription from same device (based on fingerprint)
-    subscriptions[:] = [
-        sub for sub in subscriptions 
-        if sub.get("device_fingerprint") != subscription.device_fingerprint
-    ]
-    
-    # Add new subscription
-    subscriptions.append(subscription.model_dump())
-    save_subscriptions(subscriptions)
-    print(f"✅ New subscription from device: {subscription.device_fingerprint[:16]}...")
-    print(f"📊 Total subscriptions: {len(subscriptions)}")
-    
-    # Add to history and broadcast
-    add_history_event(
-        event_type="subscription",
-        message=f"📱 Dispositivo suscrito",
-        details={
-            "device": subscription.device_fingerprint[:16],
-            "total": len(subscriptions)
-        }
-    )
-    await manager.broadcast({"type": "history_update", "history": history})
-    
-    return {"status": "subscribed", "total": len(subscriptions)}
+async def subscribe_route(subscription: webpush_handler.PushSubscription):
+    return await webpush_handler.subscribe(subscription, add_history_event, broadcast_history)
 
 
 @app.post("/api/unsubscribe")
-async def unsubscribe(subscription: PushSubscription):
-    """Remove push subscription"""
-    global subscriptions
-    initial_count = len(subscriptions)
-    subscriptions = [
-        s for s in subscriptions 
-        if s.get("device_fingerprint") != subscription.device_fingerprint
-    ]
-    removed = initial_count - len(subscriptions)
-    save_subscriptions(subscriptions)
-    print(f"🗑️ Unsubscribed device: {subscription.device_fingerprint[:16]}...")
-    
-    # Add to history and broadcast
-    add_history_event(
-        event_type="subscription",
-        message=f"📴 Dispositivo desuscrito",
-        details={
-            "device": subscription.device_fingerprint[:16],
-            "total": len(subscriptions)
-        }
-    )
-    await manager.broadcast({"type": "history_update", "history": history})
-    
-    return {"status": "unsubscribed", "removed": removed, "total": len(subscriptions)}
+async def unsubscribe_route(subscription: webpush_handler.PushSubscription):
+    return await webpush_handler.unsubscribe(subscription, add_history_event, broadcast_history)
 
 
 @app.get("/api/check-subscription/{fingerprint}")
-async def check_subscription(fingerprint: str):
-    """Check if a device is subscribed"""
-    is_subscribed = any(
-        sub.get("device_fingerprint") == fingerprint 
-        for sub in subscriptions
-    )
-    return {"is_subscribed": is_subscribed}
+async def check_subscription_route(fingerprint: str):
+    return await webpush_handler.check_subscription(fingerprint)
 
 
 @app.post("/api/clear-subscriptions")
-async def clear_subscriptions():
-    """Clear all subscriptions"""
-    global subscriptions
-    count = len(subscriptions)
-    subscriptions.clear()
-    save_subscriptions(subscriptions)
-    print(f"🗑️ Cleared all subscriptions ({count} removed)")
-    
-    # Add to history and broadcast
-    add_history_event(
-        event_type="subscription",
-        message=f"🗑️ Todas las suscripciones eliminadas",
-        details={
-            "removed": count,
-            "total": 0
-        }
-    )
-    await manager.broadcast({"type": "history_update", "history": history})
-    
-    return {"status": "cleared", "removed": count}
+async def clear_subscriptions_route():
+    return await webpush_handler.clear_subscriptions(add_history_event, broadcast_history)
 
 
 @app.post("/api/send-notification")
-async def send_notification(payload: NotificationPayload):
-    """Send push notification to all subscribers"""
-    print("=" * 50)
-    print("📬 Send notification endpoint called")
-    print(f"📊 Total subscriptions: {len(subscriptions)}")
-    
-    if not subscriptions:
-        print("⚠️ No subscribers found")
-        return {"status": "no_subscribers", "sent": 0}
-    
-    # Get VAPID keys from environment (as strings from npx web-push)
-    vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
-    vapid_public_key = os.getenv("VAPID_PUBLIC_KEY")
-    vapid_email = os.getenv("VAPID_CLAIM_EMAIL", "mailto:test@example.com")
-    
-    print(f"🔑 VAPID keys configured: {bool(vapid_private_key and vapid_public_key)}")
-    
-    if not vapid_private_key or not vapid_public_key:
-        raise HTTPException(status_code=500, detail="VAPID keys not configured")
-    
-    # Generate unique tag with timestamp to avoid duplicates across devices
-    import time
-    notification_tag = f"pwa-poc-{int(time.time())}"
-    
-    notification_data = {
-        "title": payload.title,
-        "body": payload.body,
-        "icon": payload.icon,
-        "badge": "/static/icon-192.png",
-        "tag": notification_tag,
-        "timestamp": int(time.time() * 1000)
-    }
-    
-    print(f"📦 Notification data: {notification_data}")
-    
-    sent_count = 0
-    failed_count = 0
-    
-    for idx, subscription in enumerate(subscriptions[:]):  # Copy list to safely modify during iteration
-        try:
-            print(f"📤 Sending to subscription {idx + 1}/{len(subscriptions)}: {subscription.get('device_fingerprint', 'unknown')[:16]}...")
-            webpush(
-                subscription_info=subscription,
-                data=json.dumps(notification_data),
-                vapid_private_key=vapid_private_key,
-                vapid_claims={"sub": vapid_email}
-            )
-            sent_count += 1
-            print(f"✅ Sent successfully to subscription {idx + 1}")
-        except WebPushException as e:
-            print(f"❌ WebPushException for subscription {idx + 1}: {e}")
-            print(f"   Status code: {e.response.status_code if e.response else 'N/A'}")
-            print(f"   Response text: {e.response.text if e.response else 'N/A'}")
-            failed_count += 1
-            # Remove invalid subscription
-            if e.response and e.response.status_code in [404, 410]:
-                subscriptions.remove(subscription)
-                save_subscriptions(subscriptions)
-                print(f"🗑️ Removed invalid subscription")
-        except Exception as e:
-            print(f"❌ Error sending notification to subscription {idx + 1}: {e}")
-            failed_count += 1
-    
-    print(f"📊 Results: Sent={sent_count}, Failed={failed_count}")
-    print("=" * 50)
-    
-    # Add to history and broadcast
-    add_history_event(
-        event_type="notification",
-        message=f"🔔 Notificación enviada: {payload.title}",
-        details={
-            "title": payload.title,
-            "body": payload.body,
-            "sent": sent_count,
-            "failed": failed_count,
-            "tag": notification_tag
-        }
-    )
-    await manager.broadcast({"type": "history_update", "history": history})
-    
-    return {
-        "status": "sent",
-        "sent": sent_count,
-        "failed": failed_count,
-        "total_subscribers": len(subscriptions),
-        "tag": notification_tag
-    }
+async def send_notification_route(payload: webpush_handler.NotificationPayload):
+    return await webpush_handler.send_notification(payload, add_history_event, broadcast_history)
 
 
-@app.get("/manifest.json")
-async def manifest():
-    return FileResponse("static/manifest.json")
+# ============================================================================
+# FCM ROUTES (from fcm_handler module)
+# ============================================================================
+
+# Mount FCM routes with history callbacks
+@app.post("/api/fcm/subscribe")
+async def fcm_subscribe_route(subscription: fcm_handler.FCMSubscription):
+    return await fcm_handler.fcm_subscribe(subscription, add_history_event, broadcast_history)
 
 
-@app.get("/sw.js")
-async def service_worker():
-    return FileResponse("static/sw.js", media_type="application/javascript")
+@app.post("/api/fcm/unsubscribe")
+async def fcm_unsubscribe_route(subscription: fcm_handler.FCMSubscription):
+    return await fcm_handler.fcm_unsubscribe(subscription, add_history_event, broadcast_history)
 
 
-# Background thread for periodic notifications
-def send_inactivity_notifications():
-    """Send periodic notifications every 10 minutes"""
-    # Load env variables in thread context
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    # Wait 30 seconds before first notification (give time for subscriptions)
-    time.sleep(30)
-    
-    while True:
-        try:
-            print("=" * 50)
-            print("⏰ Sending periodic backend notifications...")
-            print(f"🕐 Time: {datetime.now().strftime('%H:%M:%S')}")
-            
-            subscriptions = load_subscriptions()
-            
-            if not subscriptions:
-                print("⚠️ No subscribers for periodic notifications")
-                time.sleep(10 * 60)  # Wait 10 minutes before checking again
-                continue
-            
-            vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
-            vapid_email = os.getenv("VAPID_EMAIL") or "mailto:admin@example.com"
-            
-            if not vapid_private_key:
-                print("❌ VAPID_PRIVATE_KEY not configured")
-                continue
-            
-            notification_data = {
-                "title": "⏰ Notificación Periódica del Backend",
-                "body": f"Notificación automática enviada a las {datetime.now().strftime('%H:%M:%S')}",
-                "icon": "/static/icon-192.png",
-                "badge": "/static/icon-192.png",
-                "tag": f"backend-periodic-{int(time.time())}",
-                "timestamp": int(time.time() * 1000)
-            }
-            
-            print(f"📦 Notification data: {notification_data}")
-            
-            sent_count = 0
-            failed_count = 0
-            
-            for idx, subscription in enumerate(subscriptions):
-                try:
-                    print(f"📤 Sending to subscription {idx + 1}/{len(subscriptions)}...")
-                    webpush(
-                        subscription_info=subscription,
-                        data=json.dumps(notification_data),
-                        vapid_private_key=vapid_private_key,
-                        vapid_claims={"sub": vapid_email}
-                    )
-                    sent_count += 1
-                    print(f"✅ Sent successfully to subscription {idx + 1}")
-                except WebPushException as e:
-                    print(f"❌ WebPushException for subscription {idx + 1}: {e}")
-                    failed_count += 1
-                except Exception as e:
-                    print(f"❌ Error sending notification to subscription {idx + 1}: {e}")
-                    failed_count += 1
-            
-            print(f"📊 Periodic notification results: Sent={sent_count}, Failed={failed_count}")
-            print("=" * 50)
-            
-            # Add to history
-            add_history_event(
-                "periodic_notification",
-                "⏰ Notificación periódica del backend",
-                {
-                    "time": datetime.now().strftime('%H:%M:%S'),
-                    "sent": sent_count,
-                    "failed": failed_count
-                }
-            )
-            
-        except Exception as e:
-            print(f"❌ Error in periodic notification thread: {e}")
-        
-        # Wait 10 minutes before next notification
-        time.sleep(10 * 60)
+@app.get("/api/fcm/check-subscription/{fingerprint}")
+async def fcm_check_subscription_route(fingerprint: str):
+    return await fcm_handler.fcm_check_subscription(fingerprint)
 
+
+@app.post("/api/fcm/clear-subscriptions")
+async def fcm_clear_subscriptions_route():
+    return await fcm_handler.fcm_clear_subscriptions(add_history_event, broadcast_history)
+
+
+@app.post("/api/fcm/send")
+async def fcm_send_route(payload: fcm_handler.FCMNotificationPayload):
+    return await fcm_handler.fcm_send_notification(payload, add_history_event, broadcast_history)
+
+
+# ============================================================================
+# STARTUP
+# ============================================================================
 
 if __name__ == "__main__":
     import uvicorn
     
-    # Suprimir el error de ConnectionResetError en Windows
+    # Suppress ConnectionResetError on Windows
     logging.getLogger("asyncio").setLevel(logging.CRITICAL)
     
     # Clear background activity log on startup
@@ -610,10 +419,10 @@ if __name__ == "__main__":
         BACKGROUND_ACTIVITY_FILE.unlink()
         print("🗑️ Cleared background activity log from previous session")
     
-    # Start background thread for inactivity notifications
-    print("🧵 Starting periodic notification thread...")
-    inactivity_thread = threading.Thread(target=send_inactivity_notifications, daemon=True)
-    inactivity_thread.start()
+    # Start periodic notification thread (WebPush)
+    print("🧵 Starting periodic WebPush notification thread...")
+    periodic_thread = threading.Thread(target=webpush_handler.send_periodic_notifications, daemon=True)
+    periodic_thread.start()
     print("✅ Periodic notification thread started (will send every 10 minutes)")
     
     print("🚀 Server starting...")

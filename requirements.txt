@@ -5,3 +5,4 @@ pywebpush
 python-dotenv
 pillow
 websockets
+firebase-admin

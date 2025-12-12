@@ -60,72 +60,74 @@ body {
 }
 
 .container {
-    background: white;
+    background: linear-gradient(145deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
     border-radius: 20px;
     padding: 40px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     max-width: 600px;
     width: 100%;
 }
 
 h1 {
-    color: #667eea;
+    color: #ffffff;
     text-align: center;
     margin-bottom: 10px;
     font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
 }
 
 .version {
     font-size: 0.3em;
-    color: #aaa;
+    color: rgba(255,255,255,0.6);
     font-weight: 300;
     opacity: 0.7;
 }
 
 .description {
     text-align: center;
-    color: #666;
+    color: rgba(255,255,255,0.8);
     margin-bottom: 15px;
     font-size: 1.1em;
 }
 
 .fingerprint-display {
-    background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    background: linear-gradient(135deg, rgba(255,165,0,0.15) 0%, rgba(255,152,0,0.1) 100%);
     border-radius: 8px;
     padding: 12px 15px;
     margin-bottom: 15px;
-    border: 2px solid #ff9800;
+    border: 2px solid rgba(255,152,0,0.4);
     text-align: center;
     font-size: 0.85em;
 }
 
 .fingerprint-label {
     font-weight: bold;
-    color: #e65100;
+    color: #ffa726;
     margin-right: 8px;
 }
 
 .fingerprint-value {
-    font-family: 'Courier New', monospace;
-    color: #ef6c00;
+    color: #ffb74d;
     font-weight: bold;
     word-break: break-all;
 }
 
 .diagnostic-panel {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
     border-radius: 10px;
     padding: 15px;
     margin-bottom: 25px;
-    border: 2px solid #dee2e6;
+    border: 2px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(10px);
 }
 
 .diagnostic-title {
     font-weight: bold;
     font-size: 1.1em;
-    color: #495057;
+    color: rgba(255,255,255,0.95);
     margin-bottom: 10px;
     text-align: center;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
 
 .diagnostic-item {
@@ -133,31 +135,31 @@ h1 {
     justify-content: space-between;
     padding: 6px 10px;
     margin: 3px 0;
-    background: white;
+    background: rgba(255,255,255,0.08);
     border-radius: 5px;
     font-size: 0.9em;
 }
 
 .diagnostic-label {
     font-weight: 600;
-    color: #495057;
+    color: rgba(255,255,255,0.9);
 }
 
 .diagnostic-value {
-    font-family: 'Courier New', monospace;
-    font-weight: bold;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
 }
 
 .diagnostic-value.success {
-    color: #28a745;
+    color: #64ffda;
 }
 
 .diagnostic-value.error {
-    color: #dc3545;
+    color: #ff6b9d;
 }
 
 .diagnostic-value.warning {
-    color: #ffc107;
+    color: #ffd166;
 }
 
 .install-prompt {
@@ -217,23 +219,25 @@ h1 {
 }
 
 .activity-monitor {
-    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
     border-radius: 10px;
     padding: 15px;
     margin: 25px 0;
-    border: 2px solid #2196F3;
+    border: 2px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(10px);
 }
 
 .activity-title {
     font-weight: bold;
     font-size: 1.1em;
-    color: #1976D2;
+    color: rgba(255,255,255,0.95);
     margin-bottom: 10px;
     text-align: center;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
 
 .activity-content {
-    background: white;
+    background: rgba(255,255,255,0.08);
     border-radius: 8px;
     padding: 10px;
     margin-bottom: 10px;
@@ -245,29 +249,29 @@ h1 {
     padding: 6px 10px;
     margin: 3px 0;
     font-size: 0.95em;
+    color: rgba(255,255,255,0.9);
 }
 
 .activity-label {
     font-weight: 600;
-    color: #424242;
+    color: rgba(255,255,255,0.8);
 }
 
 .activity-value {
-    font-family: 'Courier New', monospace;
-    font-weight: bold;
-    color: #1976D2;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
 }
 
 .activity-value.active {
-    color: #4CAF50;
+    color: #64ffda;
 }
 
 .activity-value.idle {
-    color: #FF9800;
+    color: #ffd166;
 }
 
 .activity-value.inactive {
-    color: #f44336;
+    color: #ff6b9d;
 }
 
 .activity-refresh {
@@ -291,8 +295,10 @@ h1 {
 .history-section {
     margin-top: 30px;
     padding: 20px;
-    background: #f8f9fa;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
     border-radius: 10px;
+    border: 2px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(10px);
 }
 
 .history-header {
@@ -304,9 +310,10 @@ h1 {
 
 .history-title {
     font-size: 1.3em;
-    color: #333;
+    color: rgba(255,255,255,0.95);
     font-weight: bold;
     margin: 0;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
 
 .clear-button {
@@ -333,29 +340,19 @@ h1 {
 }
 
 .history-item {
-    background: white;
+    background: rgba(255,255,255,0.08);
     padding: 15px;
     margin-bottom: 10px;
     border-radius: 8px;
-    border-left: 4px solid #667eea;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border-left: 4px solid #8b9aff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
     transition: transform 0.2s;
     margin-right: 5px;
-    display: flex;
-    gap: 15px;
-    align-items: flex-start;
 }
 
 .history-item:hover {
     transform: translateX(5px);
-}
-
-.event-number {
-    font-weight: bold;
-    color: #667eea;
-    font-size: 1.2em;
-    min-width: 35px;
-    flex-shrink: 0;
+    background: rgba(255,255,255,0.12);
 }
 
 .event-content {
@@ -363,21 +360,21 @@ h1 {
 }
 
 .event-name {
-    font-weight: bold;
-    color: #667eea;
+    font-weight: 600;
+    color: #b8c5ff;
     margin-bottom: 5px;
-    font-size: 1.1em;
+    font-size: 1.05em;
 }
 
 .event-details {
-    color: #666;
+    color: rgba(255,255,255,0.7);
     font-size: 0.95em;
     line-height: 1.5;
 }
 
 .empty-message {
     text-align: center;
-    color: #999;
+    color: rgba(255,255,255,0.5);
     padding: 30px;
     font-style: italic;
 }
