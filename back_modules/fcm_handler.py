@@ -9,7 +9,7 @@ from firebase_admin import credentials, messaging
 router = APIRouter()
 
 # Data file
-FCM_TOKENS_FILE = Path("data/fcm_tokens.json")
+FCM_TOKENS_FILE = Path("data/subscriptions_fcm.json")
 
 
 class FCMSubscription(BaseModel):

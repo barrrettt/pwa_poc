@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v23';
+const CACHE_NAME = 'pwa-poc-v25';
 const urlsToCache = [
   '/',
   '/static/manifest.json',
@@ -67,7 +67,28 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
   );
+  // Force immediate activation
   self.skipWaiting();
+});
+
+// Activate event - clean old caches and take control immediately
+self.addEventListener('activate', event => {
+  console.log('🔧 SW: Activate event');
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('🗑️ SW: Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      console.log('✅ SW: Taking control of all clients');
+      return self.clients.claim();
+    })
+  );
 });
 
 // Get device fingerprint from clients or cache
@@ -147,25 +168,7 @@ self.addEventListener('periodicsync', event => {
   }
 });
 
-// Activate event - clean old caches
-self.addEventListener('activate', event => {
-  console.log('🚀 SW: Activate event');
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ SW: Removing old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-  self.clients.claim();
-});
-
-// Fetch event - Network first for HTML, cache first for static assets
+// Fetch event - Network first for HTML and JS, cache first for other static assets
 self.addEventListener('fetch', event => {
   // Don't cache POST requests or other non-GET methods
   if (event.request.method !== 'GET') {
@@ -173,8 +176,15 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // Network ONLY for JavaScript files (never cache JS to avoid update issues)
+  if (event.request.url.endsWith('.js')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
   // Network first for HTML pages
-  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+  if (event.request.mode === 'navigate' || 
+      event.request.destination === 'document') {
     event.respondWith(
       fetch(event.request)
         .then(response => {

@@ -32,6 +32,16 @@ installButton.addEventListener('click', async () => {
     }
 });
 
+// Detect when PWA is installed and reload
+window.addEventListener('appinstalled', (event) => {
+    console.log('✅ PWA instalada exitosamente');
+    console.log('🔄 Recargando aplicación...');
+    // Reload after a short delay to ensure everything is saved
+    setTimeout(() => {
+        window.location.reload();
+    }, 500);
+});
+
 // Test endpoint
 const testButton = document.getElementById('testButton');
 testButton.addEventListener('click', async () => {
@@ -50,6 +60,10 @@ testButton.addEventListener('click', async () => {
         });
         const result = await response.json();
         console.log('✅ Test response:', result);
+        
+        // Manually refresh history after test
+        console.log('🔄 Refreshing history...');
+        await renderHistory();
         
     } catch (error) {
         console.error('❌ Test error:', error);
@@ -223,7 +237,11 @@ navigator.serviceWorker.addEventListener('message', (event) => {
     const historyList = document.getElementById('historyList');
     initHistory(historyList);
     
-    // Connect WebSocket with history callback
+    // Render initial history from API
+    console.log('📜 Loading initial history...');
+    await renderHistory();
+    
+    // Connect WebSocket with history callback for live updates
     connectWebSocket(renderHistory);
     
     // Setup infinite scroll
@@ -234,7 +252,9 @@ navigator.serviceWorker.addEventListener('message', (event) => {
         console.log('✅ Service Worker inicializado');
         
         try {
-            const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            const registration = await navigator.serviceWorker.register('/sw.js', { 
+                scope: '/'
+            });
             swRegistration = registration;
             
             // Initialize modules with SW registration and fingerprint
@@ -243,12 +263,16 @@ navigator.serviceWorker.addEventListener('message', (event) => {
             
             await navigator.serviceWorker.ready;
             
-            // Initialize push modules after SW is ready
-            initWebPush(swRegistration, deviceFingerprint, subscribeButton);
-            initFCM(swRegistration, deviceFingerprint, subscribeFCMButton);
+            // Initialize push modules after SW is ready (await to ensure buttons update correctly)
+            await initWebPush(swRegistration, deviceFingerprint, subscribeButton);
+            await initFCM(swRegistration, deviceFingerprint, subscribeFCMButton);
             
             // Register periodic sync with fallback
             registerPeriodicSync(startFrontendHeartbeat);
+            
+            // Force history update after everything is initialized
+            console.log('🔄 Final history load...');
+            setTimeout(() => renderHistory(), 1000);
             
         } catch (error) {
             console.error('❌ Error registrando Service Worker:', error);

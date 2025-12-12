@@ -188,10 +188,15 @@ export function setupInfiniteScroll() {
 export function clearHistory() {
     if (!historyList) return;
     
+    console.log('🗑️ Clearing history from DOM...');
     currentPage = 1;
     hasMoreHistory = true;
     loadedEventIds.clear();
     historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
     
-    updateHistoryTitle();
+    // Force reload from server after a short delay
+    setTimeout(() => {
+        console.log('🔄 Reloading history from server...');
+        renderHistory();
+    }, 500);
 }

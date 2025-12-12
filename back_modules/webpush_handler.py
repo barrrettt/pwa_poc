@@ -273,7 +273,7 @@ def send_periodic_notifications():
                 
                 print(f"📦 WebPush data: {notification_data}")
                 
-                for idx, subscription in enumerate(current_subscriptions):
+                for idx, subscription in enumerate(current_subscriptions[:]):
                     try:
                         print(f"📤 Sending WebPush to subscription {idx + 1}/{len(current_subscriptions)}...")
                         webpush(
@@ -286,6 +286,14 @@ def send_periodic_notifications():
                         print(f"✅ WebPush sent successfully to subscription {idx + 1}")
                     except WebPushException as e:
                         print(f"❌ WebPushException for subscription {idx + 1}: {e}")
+                        # Remove expired/invalid subscriptions (410 Gone, 404 Not Found)
+                        if e.response and e.response.status_code in [404, 410]:
+                            print(f"🗑️ Removing expired WebPush subscription {idx + 1}")
+                            current_subscriptions.remove(subscription)
+                            save_subscriptions(current_subscriptions)
+                        webpush_failed += 1
+                    except Exception as e:
+                        print(f"❌ Error sending WebPush to subscription {idx + 1}: {e}")
                         webpush_failed += 1
                     except Exception as e:
                         print(f"❌ Error sending WebPush to subscription {idx + 1}: {e}")

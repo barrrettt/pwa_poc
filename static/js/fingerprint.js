@@ -1,10 +1,23 @@
 // Device Fingerprint Generation Module
 export async function generateDeviceFingerprint() {
-    // Check if we have a stored fingerprint in localStorage
-    let storedFingerprint = localStorage.getItem('device_fingerprint');
+    // Detect context (web browser or installed PWA)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                        window.navigator.standalone || 
+                        document.referrer.includes('android-app://');
+    
+    const mode = isStandalone ? 'pwa' : 'web';
+    const storageKey = `device_fingerprint_${mode}`;
+    
+    console.log('🔑 Fingerprint mode:', mode);
+    
+    // Check if we have a stored fingerprint for this mode
+    let storedFingerprint = localStorage.getItem(storageKey);
     if (storedFingerprint) {
+        console.log('✅ Using existing fingerprint for', mode);
         return storedFingerprint;
     }
+    
+    console.log('🆕 Generating NEW fingerprint for', mode);
     
     // Collect comprehensive device characteristics
     const characteristics = [];
@@ -32,8 +45,12 @@ export async function generateDeviceFingerprint() {
     characteristics.push(window.location.origin);
     characteristics.push(window.location.protocol);
     
-    // Display mode
-    characteristics.push(window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'browser');
+    // Display mode (critical for different fingerprints)
+    characteristics.push(mode); // 'web' or 'pwa'
+    const displayMode = isStandalone ? 'pwa-installed' : 'web-browser';
+    characteristics.push(displayMode);
+    
+    // Canvas fingerprint (more unique)
     
     // Canvas fingerprint (more unique)
     try {
@@ -72,9 +89,9 @@ export async function generateDeviceFingerprint() {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const fingerprint = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     
-    // Store in localStorage for consistency
-    localStorage.setItem('device_fingerprint', fingerprint);
-    console.log('Generated new fingerprint:', fingerprint.substring(0, 16) + '...');
+    // Store in localStorage with mode-specific key
+    localStorage.setItem(storageKey, fingerprint);
+    console.log('💾 Stored fingerprint for', mode, ':', fingerprint.substring(0, 16) + '...');
     
     return fingerprint;
 }

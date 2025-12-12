@@ -5,12 +5,12 @@ let currentFCMToken = null;
 let deviceFingerprint = '';
 let subscribeFCMButton = null;
 
-export function initFCM(swReg, fingerprint, buttonElement) {
+export async function initFCM(swReg, fingerprint, buttonElement) {
     swRegistration = swReg;
     deviceFingerprint = fingerprint;
     subscribeFCMButton = buttonElement;
     
-    checkFCMSubscriptionStatus();
+    await checkFCMSubscriptionStatus();
 }
 
 async function checkFCMSubscriptionStatus() {

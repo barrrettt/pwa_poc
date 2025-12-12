@@ -4,12 +4,12 @@ let isSubscribed = false;
 let deviceFingerprint = '';
 let subscribeButton = null;
 
-export function initWebPush(swReg, fingerprint, buttonElement) {
+export async function initWebPush(swReg, fingerprint, buttonElement) {
     swRegistration = swReg;
     deviceFingerprint = fingerprint;
     subscribeButton = buttonElement;
     
-    checkSubscription();
+    await checkSubscription();
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -30,17 +30,26 @@ function urlBase64ToUint8Array(base64String) {
 async function checkSubscription() {
     if (!swRegistration) return;
     
+    console.log('🔍 WebPush: Checking subscription status...');
+    console.log('🔍 WebPush: Device fingerprint:', deviceFingerprint);
+    
     const subscription = await swRegistration.pushManager.getSubscription();
     const hasLocalSubscription = !(subscription === null);
+    
+    console.log('🔍 WebPush: Has local subscription:', hasLocalSubscription);
     
     try {
         const response = await fetch(`/api/check-subscription/${deviceFingerprint}`);
         const data = await response.json();
         const hasServerSubscription = data.is_subscribed;
         
+        console.log('🔍 WebPush: Has server subscription:', hasServerSubscription);
+        
         if (hasLocalSubscription && !hasServerSubscription) {
+            console.log('⚠️ WebPush: Local exists but not on server');
             isSubscribed = false;
         } else if (!hasLocalSubscription && hasServerSubscription) {
+            console.log('⚠️ WebPush: Server has subscription but not local');
             if (subscription) {
                 await fetch('/api/unsubscribe', {
                     method: 'POST',
@@ -54,12 +63,15 @@ async function checkSubscription() {
             isSubscribed = false;
         } else {
             isSubscribed = hasLocalSubscription && hasServerSubscription;
+            console.log('✅ WebPush: Subscription status:', isSubscribed);
         }
     } catch (error) {
+        console.error('❌ WebPush: Error checking subscription:', error);
         isSubscribed = hasLocalSubscription;
     }
     
     updateSubscribeButton();
+    console.log('🔍 WebPush: Button should show:', isSubscribed ? 'Cancelar (red)' : 'Suscribirse (green)');
 }
 
 function updateSubscribeButton() {
