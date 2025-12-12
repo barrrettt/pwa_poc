@@ -172,8 +172,8 @@ export async function sendFCMNotification() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                title: '🔥 Firebase FCM Test',
-                body: `FCM notification sent at ${new Date().toLocaleTimeString()}`,
+                title: '🔥 FCM - Prueba Manual',
+                body: 'Mensaje de prueba enviado desde PWA (frontend)',
                 icon: '/static/icon-192.png'
             })
         });

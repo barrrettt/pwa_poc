@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v22';
+const CACHE_NAME = 'pwa-poc-v23';
 const urlsToCache = [
   '/',
   '/static/manifest.json',
@@ -28,9 +28,12 @@ const messaging = firebase.messaging();
 
 // Handle background messages from FCM
 messaging.onBackgroundMessage((payload) => {
+  console.log('📬 SW: ===== FCM BACKGROUND MESSAGE HANDLER FIRED =====');
   console.log('📬 SW: Background FCM message received:', payload);
   console.log('📬 SW: payload.data:', payload.data);
   console.log('📬 SW: payload.notification:', payload.notification);
+  console.log('📬 SW: payload.from:', payload.from);
+  console.log('📬 SW: payload.fcmMessageId:', payload.fcmMessageId);
   
   // When sending data-only messages, FCM puts everything in payload.data
   const data = payload.data || {};
@@ -47,46 +50,12 @@ messaging.onBackgroundMessage((payload) => {
   
   console.log('📬 SW: Showing notification with title:', notificationTitle);
   console.log('📬 SW: Notification options:', notificationOptions);
+  console.log('📬 SW: ===== END FCM HANDLER =====');
   
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 console.log('🔥 SW: Firebase messaging initialized');
-
-// Also handle push events directly for FCM data-only messages
-self.addEventListener('push', event => {
-  console.log('📬 SW: Push event received');
-  
-  if (!event.data) {
-    console.log('⚠️ SW: Push event has no data');
-    return;
-  }
-  
-  try {
-    const payload = event.data.json();
-    console.log('📬 SW: Push payload:', payload);
-    
-    // Handle FCM data-only messages
-    if (payload.data) {
-      const data = payload.data;
-      const notificationTitle = data.title || 'New notification';
-      const notificationOptions = {
-        body: data.body || 'No body',
-        icon: data.icon || '/static/icon-192.png',
-        badge: data.badge || '/static/icon-192.png',
-        tag: data.tag || 'fcm-notification',
-        data: data
-      };
-      
-      console.log('📬 SW: Showing FCM notification from push event:', notificationTitle);
-      event.waitUntil(
-        self.registration.showNotification(notificationTitle, notificationOptions)
-      );
-    }
-  } catch (error) {
-    console.error('❌ SW: Error handling push event:', error);
-  }
-});
 
 // Install event - cache resources
 self.addEventListener('install', event => {
@@ -262,31 +231,57 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Push event - handle incoming push notifications
+// Push event - handle incoming push notifications (WebPush and FCM)
 self.addEventListener('push', event => {
-  console.log('Push notification received:', event);
-  console.log('Push data:', event.data);
+  console.log('📡 Push notification received:', event);
+  console.log('📡 Push data:', event.data);
   
-  let notificationData = {
-    title: 'PWA POC',
-    body: 'Nueva notificación',
-    icon: '/static/icon-192.png',
-    badge: '/static/icon-192.png'
-  };
+  // Skip if no data
+  if (!event.data) {
+    console.log('⏭️ No data in push event, skipping');
+    return;
+  }
   
-  if (event.data) {
-    try {
-      const dataText = event.data.text();
-      console.log('Push data text:', dataText);
-      
-      if (dataText) {
-        notificationData = JSON.parse(dataText);
-        console.log('Parsed notification data:', notificationData);
-      }
-    } catch (e) {
-      console.error('Error parsing push data:', e);
-      notificationData.body = event.data.text() || 'Nueva notificación';
+  let notificationData;
+  
+  try {
+    const dataText = event.data.text();
+    console.log('📡 Push data text:', dataText);
+    
+    if (!dataText) {
+      console.log('⏭️ Empty data text, skipping');
+      return;
     }
+    
+    // Try to parse as JSON
+    const parsedData = JSON.parse(dataText);
+    console.log('📡 Parsed data:', parsedData);
+    
+    // Check if it's an FCM message (has 'from' or 'fcmMessageId' or nested 'data' field)
+    if (parsedData.from || parsedData.fcmMessageId || (parsedData.data && !parsedData.title)) {
+      console.log('🔥 Detected FCM message, processing...');
+      
+      // Extract data from FCM structure
+      const fcmData = parsedData.data || {};
+      notificationData = {
+        title: fcmData.title || 'FCM Notification',
+        body: fcmData.body || 'No body',
+        icon: fcmData.icon || '/static/icon-192.png',
+        badge: fcmData.badge || '/static/icon-192.png',
+        tag: fcmData.tag || 'fcm-notification'
+      };
+    } else {
+      // WebPush message - check if it has title and body
+      if (!parsedData.title || !parsedData.body) {
+        console.log('⏭️ Missing title or body, not a valid WebPush message, skipping');
+        return;
+      }
+      notificationData = parsedData;
+    }
+  } catch (e) {
+    console.error('❌ Error parsing push data:', e);
+    console.log('⏭️ Failed to parse, skipping notification');
+    return;
   }
   
   const options = {

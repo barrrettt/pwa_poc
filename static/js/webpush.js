@@ -173,8 +173,8 @@ export async function sendWebPushNotification() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                title: 'PWA POC - Prueba',
-                body: `Notificación de prueba enviada a las ${new Date().toLocaleTimeString()}`,
+                title: '📡 WebPush - Prueba Manual',
+                body: 'Mensaje de prueba enviado desde PWA (frontend)',
                 icon: '/static/icon-192.png'
             })
         });

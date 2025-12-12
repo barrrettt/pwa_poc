@@ -263,8 +263,8 @@ def send_periodic_notifications():
                 continue
             
             notification_data = {
-                "title": "⏰ Notificación Periódica del Backend",
-                "body": f"Notificación automática enviada a las {datetime.now().strftime('%H:%M:%S')}",
+                "title": "⏰ WebPush - Notificación Periódica",
+                "body": "Mensaje automático enviado desde BACK (backend)",
                 "icon": "/static/icon-192.png",
                 "badge": "/static/icon-192.png",
                 "tag": f"backend-periodic-{int(time.time())}",
