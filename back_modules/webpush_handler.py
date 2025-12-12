@@ -263,7 +263,7 @@ def send_periodic_notifications():
             
             if current_subscriptions and vapid_private_key:
                 notification_data = {
-                    "title": "⏰ WebPush - Notificación Periódica",
+                    "title": "⏰📡 WebPush - Notificación Periódica",
                     "body": "Mensaje automático enviado desde BACK (backend)",
                     "icon": "/static/icon-192.png",
                     "badge": "/static/icon-192.png",
@@ -323,7 +323,7 @@ def send_periodic_notifications():
                         
                         message = messaging.Message(
                             data={
-                                "title": "⏰ FCM - Notificación Periódica",
+                                "title": "⏰🔥 FCM - Notificación Periódica",
                                 "body": "Mensaje automático enviado desde BACK (backend)",
                                 "icon": "/static/icon-192.png",
                                 "badge": "/static/icon-192.png"

@@ -189,8 +189,8 @@ activityRefresh.addEventListener('click', async () => {
     activityRefresh.textContent = '🔄 Actualizar';
 });
 
-// Auto-update activity every 5 seconds
-setInterval(updateActivityMonitor, 5000);
+// Auto-update activity every 15 seconds (reduced for mobile performance)
+setInterval(updateActivityMonitor, 15000);
 
 // Heartbeat fallback (frontend)
 function startFrontendHeartbeat() {
@@ -251,9 +251,31 @@ navigator.serviceWorker.addEventListener('message', (event) => {
         
         try {
             const registration = await navigator.serviceWorker.register('/sw.js', { 
-                scope: '/'
+                scope: '/',
+                updateViaCache: 'none'  // Force SW update, never use cache
             });
             swRegistration = registration;
+            
+            // Force immediate update check
+            registration.update();
+            
+            // If there's a waiting SW, activate it immediately
+            if (registration.waiting) {
+                console.log('⚡ New SW waiting, activating now...');
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                window.location.reload();
+            }
+            
+            // Listen for SW updates
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        console.log('🔄 New SW installed, reloading...');
+                        window.location.reload();
+                    }
+                });
+            });
             
             // Initialize modules with SW registration and fingerprint
             initDiagnostics(swRegistration, deviceFingerprint);
@@ -279,7 +301,4 @@ navigator.serviceWorker.addEventListener('message', (event) => {
     } else {
         console.error('❌ Service Workers no soportado');
     }
-    
-    // Start activity monitor after everything is ready
-    setTimeout(updateActivityMonitor, 2000);
 })();

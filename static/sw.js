@@ -56,26 +56,24 @@ console.log('🔥 SW: Firebase messaging initialized');
 
 // Install event - no caching
 self.addEventListener('install', event => {
-  console.log('🔧 SW: Install event (NO CACHE MODE)');
+  console.log('🔧 SW v26: Install event (NO CACHE MODE)');
   // Force immediate activation without caching
   self.skipWaiting();
 });
 
 // Activate event - clean old caches and take control immediately
 self.addEventListener('activate', event => {
-  console.log('🔧 SW: Activate event');
+  console.log('🔧 SW v26: Activate event - Cleaning all old caches');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ SW: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+          console.log('🗑️ SW v26: Deleting cache:', cacheName);
+          return caches.delete(cacheName);
         })
       );
     }).then(() => {
-      console.log('✅ SW: Taking control of all clients');
+      console.log('✅ SW v26: Taking control of all clients');
       return self.clients.claim();
     })
   );

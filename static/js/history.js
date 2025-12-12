@@ -18,7 +18,7 @@ export async function renderHistory() {
     console.log('📜 Loading history from API...');
     
     try {
-        const response = await fetch('/api/history?page=1&limit=20');
+        const response = await fetch('/api/history?page=1&limit=5');
         const data = await response.json();
         
         totalEvents = data.total;
@@ -64,6 +64,9 @@ export async function renderHistory() {
         });
         
         updateHistoryTitle();
+        
+        // Setup infinite scroll after initial load
+        setupInfiniteScroll();
         
     } catch (error) {
         console.error('❌ Error loading history:', error);
@@ -152,7 +155,103 @@ function updateHistoryTitle() {
 }
 
 export function setupInfiniteScroll() {
-    // Simplified - can be expanded later if needed
+    if (!historyList) return;
+    
+    // Remove existing observer if any
+    if (scrollObserver) {
+        scrollObserver.disconnect();
+    }
+    
+    // Create sentinel element at the bottom
+    let sentinel = document.getElementById('history-sentinel');
+    if (!sentinel) {
+        sentinel = document.createElement('li');
+        sentinel.id = 'history-sentinel';
+        sentinel.style.height = '1px';
+        sentinel.style.visibility = 'hidden';
+    }
+    
+    // Setup intersection observer
+    scrollObserver = new IntersectionObserver(async (entries) => {
+        const entry = entries[0];
+        
+        if (entry.isIntersecting && hasMoreHistory && !isLoadingHistory) {
+            await loadMoreHistory();
+        }
+    }, {
+        root: null,
+        threshold: 0.1
+    });
+    
+    // Append sentinel to history list
+    if (hasMoreHistory) {
+        historyList.appendChild(sentinel);
+        scrollObserver.observe(sentinel);
+    }
+}
+
+async function loadMoreHistory() {
+    if (isLoadingHistory || !hasMoreHistory) return;
+    
+    isLoadingHistory = true;
+    currentPage++;
+    
+    console.log(`📜 Loading page ${currentPage}...`);
+    
+    try {
+        const response = await fetch(`/api/history?page=${currentPage}&limit=5`);
+        const data = await response.json();
+        
+        hasMoreHistory = data.hasMore;
+        
+        // Remove sentinel temporarily
+        const sentinel = document.getElementById('history-sentinel');
+        if (sentinel) {
+            sentinel.remove();
+        }
+        
+        // Append new events
+        data.history.forEach((event) => {
+            const eventId = `${event.timestamp}-${event.type}`;
+            
+            // Skip if already loaded
+            if (loadedEventIds.has(eventId)) return;
+            
+            loadedEventIds.add(eventId);
+            
+            const historyItem = document.createElement('li');
+            historyItem.className = 'history-item';
+            
+            const date = new Date(event.timestamp * 1000);
+            const timestamp = date.toLocaleString('es-ES');
+            
+            historyItem.innerHTML = `
+                <div class="event-content">
+                    <div class="event-name">${event.type}</div>
+                    <div class="event-details">
+                        ${event.message}<br>
+                        ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
+                        <strong>Timestamp:</strong> ${timestamp}
+                    </div>
+                </div>
+            `;
+            
+            historyList.appendChild(historyItem);
+        });
+        
+        // Re-attach sentinel if there's more
+        if (hasMoreHistory && sentinel) {
+            historyList.appendChild(sentinel);
+        }
+        
+        console.log(`✅ Loaded page ${currentPage}, hasMore: ${hasMoreHistory}`);
+        
+    } catch (error) {
+        console.error('❌ Error loading more history:', error);
+        currentPage--; // Revert page increment on error
+    } finally {
+        isLoadingHistory = false;
+    }
 }
 
 export function clearHistory() {
