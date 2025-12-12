@@ -235,8 +235,11 @@ async def send_notification(payload: NotificationPayload, add_history_callback=N
 
 
 def send_periodic_notifications():
-    """Send periodic notifications every 10 minutes"""
+    """Send periodic notifications every 10 minutes (both WebPush and FCM)"""
     from dotenv import load_dotenv
+    from firebase_admin import messaging
+    from .fcm_handler import fcm_tokens, save_fcm_tokens
+    
     load_dotenv()
     
     # Wait 30 seconds before first notification
@@ -248,53 +251,101 @@ def send_periodic_notifications():
             print("⏰ Sending periodic backend notifications...")
             print(f"🕐 Time: {datetime.now().strftime('%H:%M:%S')}")
             
+            # WEBPUSH NOTIFICATIONS
+            print("\n📡 Sending WebPush notifications...")
             current_subscriptions = load_subscriptions()
-            
-            if not current_subscriptions:
-                print("⚠️ No subscribers for periodic notifications")
-                time.sleep(10 * 60)
-                continue
             
             vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
             vapid_email = os.getenv("VAPID_EMAIL") or "mailto:admin@example.com"
             
-            if not vapid_private_key:
-                print("❌ VAPID_PRIVATE_KEY not configured")
-                continue
+            webpush_sent = 0
+            webpush_failed = 0
             
-            notification_data = {
-                "title": "⏰ WebPush - Notificación Periódica",
-                "body": "Mensaje automático enviado desde BACK (backend)",
-                "icon": "/static/icon-192.png",
-                "badge": "/static/icon-192.png",
-                "tag": f"backend-periodic-{int(time.time())}",
-                "timestamp": int(time.time() * 1000)
-            }
+            if current_subscriptions and vapid_private_key:
+                notification_data = {
+                    "title": "⏰ WebPush - Notificación Periódica",
+                    "body": "Mensaje automático enviado desde BACK (backend)",
+                    "icon": "/static/icon-192.png",
+                    "badge": "/static/icon-192.png",
+                    "tag": f"backend-periodic-{int(time.time())}",
+                    "timestamp": int(time.time() * 1000)
+                }
+                
+                print(f"📦 WebPush data: {notification_data}")
+                
+                for idx, subscription in enumerate(current_subscriptions):
+                    try:
+                        print(f"📤 Sending WebPush to subscription {idx + 1}/{len(current_subscriptions)}...")
+                        webpush(
+                            subscription_info=subscription,
+                            data=json.dumps(notification_data),
+                            vapid_private_key=vapid_private_key,
+                            vapid_claims={"sub": vapid_email}
+                        )
+                        webpush_sent += 1
+                        print(f"✅ WebPush sent successfully to subscription {idx + 1}")
+                    except WebPushException as e:
+                        print(f"❌ WebPushException for subscription {idx + 1}: {e}")
+                        webpush_failed += 1
+                    except Exception as e:
+                        print(f"❌ Error sending WebPush to subscription {idx + 1}: {e}")
+                        webpush_failed += 1
+                
+                print(f"📊 WebPush results: Sent={webpush_sent}, Failed={webpush_failed}")
+            else:
+                print("⚠️ No WebPush subscribers or VAPID key not configured")
             
-            print(f"📦 Notification data: {notification_data}")
+            # Wait 5 seconds between WebPush and FCM
+            print("\n⏳ Waiting 5 seconds before sending FCM...")
+            time.sleep(5)
             
-            sent_count = 0
-            failed_count = 0
+            # FCM NOTIFICATIONS
+            print("\n🔥 Sending FCM notifications...")
+            fcm_sent = 0
+            fcm_failed = 0
             
-            for idx, subscription in enumerate(current_subscriptions):
-                try:
-                    print(f"📤 Sending to subscription {idx + 1}/{len(current_subscriptions)}...")
-                    webpush(
-                        subscription_info=subscription,
-                        data=json.dumps(notification_data),
-                        vapid_private_key=vapid_private_key,
-                        vapid_claims={"sub": vapid_email}
-                    )
-                    sent_count += 1
-                    print(f"✅ Sent successfully to subscription {idx + 1}")
-                except WebPushException as e:
-                    print(f"❌ WebPushException for subscription {idx + 1}: {e}")
-                    failed_count += 1
-                except Exception as e:
-                    print(f"❌ Error sending notification to subscription {idx + 1}: {e}")
-                    failed_count += 1
+            if fcm_tokens:
+                for idx, token_data in enumerate(fcm_tokens[:]):
+                    try:
+                        token = token_data.get("token")
+                        if not token:
+                            continue
+                        
+                        print(f"📤 Sending FCM to device {idx + 1}/{len(fcm_tokens)}: {token_data.get('device_fingerprint', 'unknown')[:16]}...")
+                        
+                        message = messaging.Message(
+                            data={
+                                "title": "⏰ FCM - Notificación Periódica",
+                                "body": "Mensaje automático enviado desde BACK (backend)",
+                                "icon": "/static/icon-192.png",
+                                "badge": "/static/icon-192.png"
+                            },
+                            token=token,
+                            webpush=messaging.WebpushConfig(
+                                headers={
+                                    "Urgency": "high"
+                                }
+                            )
+                        )
+                        
+                        response = messaging.send(message)
+                        print(f"✅ FCM sent successfully: {response}")
+                        fcm_sent += 1
+                        
+                    except messaging.UnregisteredError:
+                        print(f"❌ FCM token is invalid or unregistered, removing...")
+                        fcm_tokens.remove(token_data)
+                        save_fcm_tokens(fcm_tokens)
+                        fcm_failed += 1
+                    except Exception as e:
+                        print(f"❌ Error sending FCM to device {idx + 1}: {e}")
+                        fcm_failed += 1
+                
+                print(f"📊 FCM results: Sent={fcm_sent}, Failed={fcm_failed}")
+            else:
+                print("⚠️ No FCM subscribers")
             
-            print(f"📊 Periodic notification results: Sent={sent_count}, Failed={failed_count}")
+            print(f"\n🎯 TOTAL: WebPush={webpush_sent}, FCM={fcm_sent}")
             print("=" * 50)
             
         except Exception as e:
