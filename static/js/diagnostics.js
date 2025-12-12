@@ -114,6 +114,30 @@ export async function updateActivityMonitor() {
         activityStatus.textContent = '❌ Error';
         activityStatus.className = 'activity-value inactive';
     }
+    
+    // Update next notification time
+    try {
+        const response = await fetch('/api/next-notification');
+        const data = await response.json();
+        
+        const nextNotificationTime = document.getElementById('nextNotificationTime');
+        if (!nextNotificationTime) return; // Element doesn't exist yet
+        
+        if (data.status === 'unknown') {
+            nextNotificationTime.textContent = 'Desconocido';
+        } else {
+            const seconds = data.seconds_remaining;
+            if (seconds < 60) {
+                nextNotificationTime.textContent = `En ${seconds}s`;
+            } else {
+                const minutes = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                nextNotificationTime.textContent = `En ${minutes}m ${secs}s`;
+            }
+        }
+    } catch (error) {
+        // Ignore if endpoint not available yet
+    }
 }
 
 export async function registerPeriodicSync(onSuccess) {

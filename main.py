@@ -20,7 +20,7 @@ from datetime import datetime
 from back_modules import webpush_handler, fcm_handler
 
 # App version
-APP_VERSION = "1.0.16"
+APP_VERSION = "1.0.17"
 
 # Load environment variables
 load_dotenv()
@@ -352,6 +352,33 @@ async def get_activity(fingerprint: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/next-notification")
+async def get_next_notification():
+    """Get time until next periodic notification"""
+    from back_modules.webpush_handler import next_periodic_notification_time
+    
+    if next_periodic_notification_time is None:
+        return {
+            "status": "unknown",
+            "seconds_remaining": None,
+            "next_notification_at": None
+        }
+    
+    current_time = time.time()
+    seconds_remaining = int(next_periodic_notification_time - current_time)
+    
+    # If negative, means we're past the scheduled time (edge case)
+    if seconds_remaining < 0:
+        seconds_remaining = 0
+    
+    return {
+        "status": "scheduled",
+        "seconds_remaining": seconds_remaining,
+        "next_notification_at": datetime.fromtimestamp(next_periodic_notification_time).strftime('%Y-%m-%d %H:%M:%S')
+    }
+
 
 
 # ============================================================================

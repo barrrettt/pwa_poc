@@ -13,6 +13,9 @@ router = APIRouter()
 # Data file
 SUBSCRIPTIONS_FILE = Path("data/subscriptions.json")
 
+# Global variable to track next periodic notification time
+next_periodic_notification_time = None
+
 
 class PushSubscription(BaseModel):
     endpoint: str
@@ -236,11 +239,15 @@ async def send_notification(payload: NotificationPayload, add_history_callback=N
 
 def send_periodic_notifications():
     """Send periodic notifications every 10 minutes (both WebPush and FCM)"""
+    global next_periodic_notification_time
     from dotenv import load_dotenv
     from firebase_admin import messaging
     from .fcm_handler import load_fcm_tokens, save_fcm_tokens
     
     load_dotenv()
+    
+    # Set initial next notification time (30 seconds from now)
+    next_periodic_notification_time = time.time() + 30
     
     # Wait 30 seconds before first notification
     time.sleep(30)
@@ -362,6 +369,9 @@ def send_periodic_notifications():
             
         except Exception as e:
             print(f"❌ Error in periodic notification thread: {e}")
+        
+        # Set next notification time (10 minutes from now)
+        next_periodic_notification_time = time.time() + (10 * 60)
         
         # Wait 10 minutes before next notification
         time.sleep(10 * 60)
