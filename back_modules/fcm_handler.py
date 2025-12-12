@@ -176,18 +176,20 @@ async def fcm_send_notification(payload: FCMNotificationPayload, add_history_cal
             
             print(f"📤 Sending FCM to device {idx + 1}/{len(fcm_tokens)}: {token_data.get('device_fingerprint', 'unknown')[:16]}...")
             
+            # Send only data payload to trigger onBackgroundMessage in SW
+            # If we use notification field, browser shows it automatically and SW handler doesn't fire
             message = messaging.Message(
-                notification=messaging.Notification(
-                    title=payload.title,
-                    body=payload.body,
-                    image=payload.icon
-                ),
+                data={
+                    "title": payload.title,
+                    "body": payload.body,
+                    "icon": payload.icon or "/static/icon-192.png",
+                    "badge": "/static/icon-192.png"
+                },
                 token=token,
                 webpush=messaging.WebpushConfig(
-                    notification=messaging.WebpushNotification(
-                        icon=payload.icon,
-                        badge="/static/icon-192.png"
-                    )
+                    headers={
+                        "Urgency": "high"
+                    }
                 )
             )
             

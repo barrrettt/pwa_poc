@@ -29,20 +29,64 @@ const messaging = firebase.messaging();
 // Handle background messages from FCM
 messaging.onBackgroundMessage((payload) => {
   console.log('📬 SW: Background FCM message received:', payload);
+  console.log('📬 SW: payload.data:', payload.data);
+  console.log('📬 SW: payload.notification:', payload.notification);
   
-  const notificationTitle = payload.notification?.title || 'New notification';
+  // When sending data-only messages, FCM puts everything in payload.data
+  const data = payload.data || {};
+  const notification = payload.notification || {};
+  
+  const notificationTitle = data.title || notification.title || 'New notification';
   const notificationOptions = {
-    body: payload.notification?.body || '',
-    icon: payload.notification?.icon || '/static/icon-192.png',
-    badge: '/static/icon-192.png',
-    tag: payload.data?.tag || 'fcm-notification',
-    data: payload.data
+    body: data.body || notification.body || 'No body',
+    icon: data.icon || notification.icon || notification.image || '/static/icon-192.png',
+    badge: data.badge || '/static/icon-192.png',
+    tag: data.tag || 'fcm-notification',
+    data: data
   };
+  
+  console.log('📬 SW: Showing notification with title:', notificationTitle);
+  console.log('📬 SW: Notification options:', notificationOptions);
   
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 console.log('🔥 SW: Firebase messaging initialized');
+
+// Also handle push events directly for FCM data-only messages
+self.addEventListener('push', event => {
+  console.log('📬 SW: Push event received');
+  
+  if (!event.data) {
+    console.log('⚠️ SW: Push event has no data');
+    return;
+  }
+  
+  try {
+    const payload = event.data.json();
+    console.log('📬 SW: Push payload:', payload);
+    
+    // Handle FCM data-only messages
+    if (payload.data) {
+      const data = payload.data;
+      const notificationTitle = data.title || 'New notification';
+      const notificationOptions = {
+        body: data.body || 'No body',
+        icon: data.icon || '/static/icon-192.png',
+        badge: data.badge || '/static/icon-192.png',
+        tag: data.tag || 'fcm-notification',
+        data: data
+      };
+      
+      console.log('📬 SW: Showing FCM notification from push event:', notificationTitle);
+      event.waitUntil(
+        self.registration.showNotification(notificationTitle, notificationOptions)
+      );
+    }
+  } catch (error) {
+    console.error('❌ SW: Error handling push event:', error);
+  }
+});
 
 // Install event - cache resources
 self.addEventListener('install', event => {
