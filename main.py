@@ -20,7 +20,7 @@ from datetime import datetime
 from back_modules import webpush_handler, fcm_handler
 
 # App version
-APP_VERSION = "1.0.15"
+APP_VERSION = "1.0.16"
 
 # Load environment variables
 load_dotenv()
@@ -206,23 +206,16 @@ async def websocket_endpoint(websocket: WebSocket):
     # Reload history from file before sending (ensures fresh data)
     history = load_history()
     
-    # Send current history to the new client
-    try:
-        await websocket.send_json({"type": "history_update", "history": history})
-    except Exception:
-        pass  # Client will reconnect if needed
+    # Don't send initial history via WebSocket - frontend loads from API
+    # This prevents sending large amounts of data on every reconnect
     
     try:
         while True:
-            # Receive messages from client
+            # Receive messages from client (if needed in future)
             data = await websocket.receive_text()
             message = json.loads(data)
             
-            # Process message and broadcast to all clients
-            if message.get('type') == 'clear_history':
-                history.clear()
-                save_history(history)
-                await manager.broadcast({'type': 'history_update', 'history': history})
+            # Future: could handle client-to-server messages here
             
     except WebSocketDisconnect:
         pass  # Normal disconnect
@@ -258,11 +251,15 @@ async def get_history(page: int = 1, limit: int = 20):
 
 @app.post("/api/history/clear")
 async def clear_history():
-    """Clear history"""
+    """Clear history and broadcast to all clients"""
     global history
+    print("🗑️ Clearing history...")
     history.clear()
     save_history(history)
-    await manager.broadcast({'type': 'history_update', 'history': history})
+    print(f"📡 Broadcasting clear to {len(manager.active_connections)} clients...")
+    # Broadcast clear signal to all clients
+    await manager.broadcast({'type': 'history_clear'})
+    print("✅ History cleared and broadcasted")
     return {"status": "cleared"}
 
 
@@ -284,8 +281,8 @@ async def test_endpoint(request: TestRequest):
         }
     )
     
-    # Broadcast history update
-    await manager.broadcast({"type": "history_update", "history": history})
+    # Broadcast only the new event (not entire history)
+    await broadcast_history()
     
     return {"data": "test ok"}
 

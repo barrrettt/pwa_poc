@@ -77,10 +77,17 @@ export async function renderHistory() {
 export function updateHistoryFromWebSocket(eventData) {
     if (!historyList) return;
     
-    console.log('📨 WebSocket update received:', eventData ? 'single event' : 'empty');
+    console.log('📨 WebSocket update received:', eventData ? 'single event' : 'clear signal');
     
-    // If null/empty, do nothing (history cleared is handled by API)
-    if (!eventData) {
+    // If null, clear the history (someone else cleared it)
+    if (eventData === null) {
+        console.log('🗑️ Clearing history (cleared remotely)');
+        historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
+        loadedEventIds.clear();
+        totalEvents = 0;
+        currentPage = 1;
+        hasMoreHistory = true;
+        updateHistoryTitle();
         return;
     }
     

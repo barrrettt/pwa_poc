@@ -21,6 +21,12 @@ export function connectWebSocket(onHistoryUpdate) {
             console.log('📜 New event received:', data.event ? 'single event' : 'empty');
             onHistoryUpdate(data.event);  // Pass single event, not array
         }
+        
+        // Backend sends history_clear when someone clears history
+        if (data.type === 'history_clear' && onHistoryUpdate) {
+            console.log('🗑️ History cleared by another user');
+            onHistoryUpdate(null);  // Signal to clear
+        }
     };
     
     ws.onclose = () => {

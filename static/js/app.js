@@ -1,6 +1,6 @@
 // Main App - PWA POC
 // Imports from modules
-import { connectWebSocket, sendWebSocketMessage } from './websocket.js';
+import { connectWebSocket } from './websocket.js';
 import { generateDeviceFingerprint } from './fingerprint.js';
 import { initHistory, renderHistory, updateHistoryFromWebSocket, setupInfiniteScroll, clearHistory } from './history.js';
 import { initWebPush, toggleWebPushSubscription, sendWebPushNotification, clearWebPushSubscriptions } from './webpush.js';
@@ -174,9 +174,31 @@ sendFCMButton.addEventListener('click', async () => {
 
 // Clear history button
 const clearHistoryButton = document.getElementById('clearHistoryButton');
-clearHistoryButton.addEventListener('click', () => {
-    sendWebSocketMessage({ type: 'clear_history' });
-    clearHistory();
+clearHistoryButton.addEventListener('click', async () => {
+    try {
+        clearHistoryButton.disabled = true;
+        clearHistoryButton.textContent = '⏳ Limpiando...';
+        
+        // Call HTTP endpoint (which will broadcast to all clients via WebSocket)
+        const response = await fetch('/api/history/clear', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            console.log('✅ History cleared successfully');
+            // Local clear will happen via WebSocket broadcast
+        } else {
+            console.error('❌ Failed to clear history');
+        }
+    } catch (error) {
+        console.error('❌ Error clearing history:', error);
+    } finally {
+        clearHistoryButton.disabled = false;
+        clearHistoryButton.textContent = '🗑️ Limpiar';
+    }
 });
 
 // Activity monitor refresh button
