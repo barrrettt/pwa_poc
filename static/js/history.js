@@ -11,95 +11,33 @@ export function initHistory(historyListElement) {
     historyList = historyListElement;
 }
 
-export function renderHistory(historyData) {
+// Main render function - loads from API
+export async function renderHistory() {
     if (!historyList) return;
     
-    // If list is empty (first load), load first page
-    if (historyList.children.length === 0 || 
-        (historyList.children.length === 1 && historyList.querySelector('.empty-message'))) {
-        currentPage = 1;
-        hasMoreHistory = true;
-        historyList.innerHTML = '';
-        loadedEventIds.clear();
-        loadHistoryPage();
-        return;
-    }
-    
-    // Otherwise, check for new events and prepend them
-    if (!historyData || historyData.length === 0) return;
-    
-    // Get the most recent events (reversed order - newest first)
-    const reversedHistory = historyData.slice().reverse();
-    
-    // Find new events (those not in our loaded set)
-    const newEvents = reversedHistory.filter(event => {
-        const eventId = `${event.timestamp}-${event.type}`;
-        return !loadedEventIds.has(eventId);
-    });
-    
-    // Prepend new events at the top (before loading indicator if it exists)
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    const insertPosition = loadingIndicator || null;
-    
-    newEvents.forEach((event, index) => {
-        const eventId = `${event.timestamp}-${event.type}`;
-        loadedEventIds.add(eventId);
-        
-        const historyItem = document.createElement('li');
-        historyItem.className = 'history-item';
-        historyItem.style.animation = 'slideIn 0.3s ease-out';
-        
-        const date = new Date(event.timestamp * 1000);
-        const timestamp = date.toLocaleString('es-ES');
-        const eventNumber = index + 1;
-        
-        historyItem.innerHTML = `
-            <div class="event-content">
-                <div class="event-name">${eventNumber}. ${event.type}</div>
-                <div class="event-details">
-                    ${event.message}<br>
-                    ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
-                    <strong>Timestamp:</strong> ${timestamp}
-                </div>
-            </div>
-        `;
-        
-        if (insertPosition) {
-            historyList.insertBefore(historyItem, insertPosition);
-        } else {
-            historyList.insertBefore(historyItem, historyList.firstChild);
-        }
-    });
-    
-    totalEvents = historyData.length;
-    updateHistoryTitle();
-}
-
-async function loadHistoryPage() {
-    if (isLoadingHistory || !hasMoreHistory || !historyList) return;
-    
-    isLoadingHistory = true;
+    console.log('📜 Loading history from API...');
     
     try {
-        const response = await fetch(`/api/history?page=${currentPage}&limit=5`);
+        const response = await fetch('/api/history?page=1&limit=20');
         const data = await response.json();
         
         totalEvents = data.total;
         hasMoreHistory = data.hasMore;
+        currentPage = 1;
+        loadedEventIds.clear();
         
-        updateHistoryTitle();
+        console.log('📊 Received', data.history.length, 'events, total:', totalEvents);
         
-        if (currentPage === 1 && data.history.length === 0) {
+        // Clear list
+        historyList.innerHTML = '';
+        
+        if (data.history.length === 0) {
             historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
-            isLoadingHistory = false;
+            updateHistoryTitle();
             return;
         }
         
-        const emptyMessage = historyList.querySelector('.empty-message');
-        if (emptyMessage) {
-            emptyMessage.remove();
-        }
-        
+        // Render events
         data.history.forEach((event, index) => {
             const eventId = `${event.timestamp}-${event.type}`;
             loadedEventIds.add(eventId);
@@ -109,7 +47,7 @@ async function loadHistoryPage() {
             
             const date = new Date(event.timestamp * 1000);
             const timestamp = date.toLocaleString('es-ES');
-            const eventNumber = (currentPage - 1) * 5 + index + 1;
+            const eventNumber = index + 1;
             
             historyItem.innerHTML = `
                 <div class="event-content">
@@ -125,29 +63,85 @@ async function loadHistoryPage() {
             historyList.appendChild(historyItem);
         });
         
-        let loadingIndicator = document.getElementById('loadingIndicator');
-        if (loadingIndicator) {
-            loadingIndicator.remove();
-        }
+        updateHistoryTitle();
         
-        if (hasMoreHistory) {
-            loadingIndicator = document.createElement('li');
-            loadingIndicator.id = 'loadingIndicator';
-            loadingIndicator.className = 'loading-indicator';
-            loadingIndicator.textContent = 'Cargando más eventos...';
-            historyList.appendChild(loadingIndicator);
-            
-            if (scrollObserver && loadingIndicator) {
-                scrollObserver.observe(loadingIndicator);
-            }
-        }
-        
-        currentPage++;
     } catch (error) {
-        console.error('Error loading history page:', error);
-    } finally {
-        isLoadingHistory = false;
+        console.error('❌ Error loading history:', error);
     }
+}
+
+// WebSocket update - only adds NEW events at the top
+export function updateHistoryFromWebSocket(historyData) {
+    if (!historyList) return;
+    
+    console.log('📨 WebSocket update received:', historyData ? historyData.length + ' events' : 'empty');
+    console.log('📋 Currently loaded events:', loadedEventIds.size);
+    
+    // If empty, clear everything
+    if (!historyData || historyData.length === 0) {
+        console.log('🗑️ Clearing history (empty from server)');
+        historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
+        loadedEventIds.clear();
+        totalEvents = 0;
+        updateHistoryTitle();
+        return;
+    }
+    
+    // Find new events not in our set
+    const reversedHistory = historyData.slice().reverse();
+    
+    console.log('🔍 Checking for new events...');
+    reversedHistory.forEach((event, idx) => {
+        const eventId = `${event.timestamp}-${event.type}`;
+        const isNew = !loadedEventIds.has(eventId);
+        if (idx < 3) { // Log first 3 for debugging
+            console.log(`  Event ${idx}: ${eventId.substring(0, 30)}... - ${isNew ? 'NEW' : 'already loaded'}`);
+        }
+    });
+    
+    const newEvents = reversedHistory.filter(event => {
+        const eventId = `${event.timestamp}-${event.type}`;
+        return !loadedEventIds.has(eventId);
+    });
+    
+    console.log('📥 Found', newEvents.length, 'new events to add');
+    
+    if (newEvents.length === 0) return;
+    
+    // Remove empty message if exists
+    const emptyMessage = historyList.querySelector('.empty-message');
+    if (emptyMessage) {
+        emptyMessage.remove();
+    }
+    
+    // Prepend new events at the top
+    newEvents.forEach(event => {
+        const eventId = `${event.timestamp}-${event.type}`;
+        loadedEventIds.add(eventId);
+        
+        const historyItem = document.createElement('li');
+        historyItem.className = 'history-item';
+        historyItem.style.animation = 'slideIn 0.3s ease-out';
+        
+        const date = new Date(event.timestamp * 1000);
+        const timestamp = date.toLocaleString('es-ES');
+        
+        historyItem.innerHTML = `
+            <div class="event-content">
+                <div class="event-name">${event.type}</div>
+                <div class="event-details">
+                    ${event.message}<br>
+                    ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
+                    <strong>Timestamp:</strong> ${timestamp}
+                </div>
+            </div>
+        `;
+        
+        historyList.insertBefore(historyItem, historyList.firstChild);
+    });
+    
+    totalEvents = historyData.length;
+    updateHistoryTitle();
 }
 
 function updateHistoryTitle() {
@@ -158,45 +152,17 @@ function updateHistoryTitle() {
 }
 
 export function setupInfiniteScroll() {
-    scrollObserver = new IntersectionObserver(
-        (entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting && hasMoreHistory && !isLoadingHistory) {
-                    loadHistoryPage();
-                }
-            });
-        },
-        {
-            root: null,
-            rootMargin: '200px',
-            threshold: 0.1
-        }
-    );
-    
-    const checkAndObserve = () => {
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        if (loadingIndicator) {
-            scrollObserver.observe(loadingIndicator);
-        } else if (hasMoreHistory) {
-            setTimeout(checkAndObserve, 100);
-        }
-    };
-    
-    checkAndObserve();
+    // Simplified - can be expanded later if needed
 }
 
 export function clearHistory() {
     if (!historyList) return;
     
-    console.log('🗑️ Clearing history from DOM...');
+    console.log('🗑️ Clearing history locally');
     currentPage = 1;
     hasMoreHistory = true;
     loadedEventIds.clear();
+    totalEvents = 0;
     historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
-    
-    // Force reload from server after a short delay
-    setTimeout(() => {
-        console.log('🔄 Reloading history from server...');
-        renderHistory();
-    }, 500);
+    updateHistoryTitle();
 }

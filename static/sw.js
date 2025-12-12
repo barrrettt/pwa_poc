@@ -1,11 +1,8 @@
-const CACHE_NAME = 'pwa-poc-v25';
-const urlsToCache = [
-  '/',
-  '/static/manifest.json',
-  '/static/icon-192.png',
-  '/static/icon-512.png',
-  '/static/js/firebase-config.js'
-];
+const CACHE_NAME = 'pwa-poc-v26';
+const urlsToCache = [];
+
+// ⚠️ NO CACHING ENABLED - All requests go to network
+// This is for development/debugging purposes
 
 // Firebase configuration for SW
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
@@ -57,17 +54,10 @@ messaging.onBackgroundMessage((payload) => {
 
 console.log('🔥 SW: Firebase messaging initialized');
 
-// Install event - cache resources
+// Install event - no caching
 self.addEventListener('install', event => {
-  console.log('🔧 SW: Install event');
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('✅ SW: Cache opened');
-        return cache.addAll(urlsToCache);
-      })
-  );
-  // Force immediate activation
+  console.log('🔧 SW: Install event (NO CACHE MODE)');
+  // Force immediate activation without caching
   self.skipWaiting();
 });
 
@@ -168,76 +158,14 @@ self.addEventListener('periodicsync', event => {
   }
 });
 
-// Fetch event - Network first for HTML and JS, cache first for other static assets
+// Fetch event - NETWORK ONLY (no caching at all)
 self.addEventListener('fetch', event => {
-  // Don't cache POST requests or other non-GET methods
-  if (event.request.method !== 'GET') {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-  
-  // Network ONLY for JavaScript files (never cache JS to avoid update issues)
-  if (event.request.url.endsWith('.js')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-  
-  // Network first for HTML pages
-  if (event.request.mode === 'navigate' || 
-      event.request.destination === 'document') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Clone the response before caching
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-          return response;
-        })
-        .catch(() => {
-          // Fallback to cache if network fails
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
-  
-  // Cache first for static assets
+  // Always fetch from network, never use cache
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        
-        // Clone the request
-        const fetchRequest = event.request.clone();
-        
-        return fetch(fetchRequest).then(response => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-          
-          // Clone the response
-          const responseToCache = response.clone();
-          
-          // Cache static resources and GET API calls
-          if (event.request.url.includes('/static/') || 
-              (event.request.url.includes('/api/') && event.request.method === 'GET')) {
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          
-          return response;
-        }).catch(() => {
-          // Network failed, try to return cached response
-          return caches.match(event.request);
-        });
-      })
+    fetch(event.request).catch(error => {
+      console.error('❌ SW: Network request failed:', event.request.url, error);
+      throw error;
+    })
   );
 });
 

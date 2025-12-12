@@ -20,7 +20,7 @@ from datetime import datetime
 from back_modules import webpush_handler, fcm_handler
 
 # App version
-APP_VERSION = "1.0.11"
+APP_VERSION = "1.0.12"
 
 # Load environment variables
 load_dotenv()
@@ -193,6 +193,9 @@ async def websocket_endpoint(websocket: WebSocket):
     
     await manager.connect(websocket)
     
+    # Reload history from file before sending (ensures fresh data)
+    history = load_history()
+    
     # Send current history to the new client
     try:
         await websocket.send_json({"type": "history_update", "history": history})
@@ -224,7 +227,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # ============================================================================
 
 @app.get("/api/history")
-async def get_history(page: int = 1, limit: int = 5):
+async def get_history(page: int = 1, limit: int = 20):
     """Get paginated history"""
     total = len(history)
     start_idx = (page - 1) * limit

@@ -2,7 +2,7 @@
 // Imports from modules
 import { connectWebSocket, sendWebSocketMessage } from './websocket.js';
 import { generateDeviceFingerprint } from './fingerprint.js';
-import { initHistory, renderHistory, setupInfiniteScroll, clearHistory } from './history.js';
+import { initHistory, renderHistory, updateHistoryFromWebSocket, setupInfiniteScroll, clearHistory } from './history.js';
 import { initWebPush, toggleWebPushSubscription, sendWebPushNotification, clearWebPushSubscriptions } from './webpush.js';
 import { initFCM, toggleFCMSubscription, sendFCMNotification, clearFCMSubscriptions } from './fcm.js';
 import { initDiagnostics, updateDiagnosticPanel, updateActivityMonitor, registerPeriodicSync, sendHeartbeat } from './diagnostics.js';
@@ -61,9 +61,7 @@ testButton.addEventListener('click', async () => {
         const result = await response.json();
         console.log('✅ Test response:', result);
         
-        // Manually refresh history after test
-        console.log('🔄 Refreshing history...');
-        await renderHistory();
+        // History will be updated automatically via WebSocket
         
     } catch (error) {
         console.error('❌ Test error:', error);
@@ -237,12 +235,12 @@ navigator.serviceWorker.addEventListener('message', (event) => {
     const historyList = document.getElementById('historyList');
     initHistory(historyList);
     
-    // Render initial history from API
+    // Load initial history from API
     console.log('📜 Loading initial history...');
     await renderHistory();
     
-    // Connect WebSocket with history callback for live updates
-    connectWebSocket(renderHistory);
+    // Connect WebSocket for live updates (uses different function)
+    connectWebSocket(updateHistoryFromWebSocket);
     
     // Setup infinite scroll
     setupInfiniteScroll();
