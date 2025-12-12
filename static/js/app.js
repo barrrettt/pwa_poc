@@ -94,7 +94,7 @@ sendNotificationButton.addEventListener('click', async () => {
         console.error('Error:', error);
     } finally {
         sendNotificationButton.disabled = false;
-        sendNotificationButton.textContent = '� Enviar';
+        sendNotificationButton.textContent = '📨 Enviar';
     }
 });
 
