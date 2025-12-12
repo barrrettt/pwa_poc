@@ -20,7 +20,7 @@ from datetime import datetime
 from back_modules import webpush_handler, fcm_handler
 
 # App version
-APP_VERSION = "1.0.14"
+APP_VERSION = "1.0.15"
 
 # Load environment variables
 load_dotenv()
@@ -140,8 +140,18 @@ def add_history_event(event_type: str, message: str, details: dict = None):
 
 
 async def broadcast_history():
-    """Broadcast history update to all connected clients"""
-    await manager.broadcast({"type": "history_update", "history": history})
+    """Broadcast only the latest event to all connected clients (not entire history)"""
+    if history:
+        latest_event = history[-1]  # Get last event only
+        await manager.broadcast({
+            "type": "history_update", 
+            "event": latest_event  # Single event, not entire array
+        })
+    else:
+        await manager.broadcast({
+            "type": "history_update",
+            "event": None
+        })
 
 
 # Load data on startup

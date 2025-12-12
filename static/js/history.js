@@ -73,43 +73,38 @@ export async function renderHistory() {
     }
 }
 
-// WebSocket update - only adds NEW events at the top
-export function updateHistoryFromWebSocket(historyData) {
+// WebSocket update - updates counter and adds event ONLY if on first page
+export function updateHistoryFromWebSocket(eventData) {
     if (!historyList) return;
     
-    console.log('📨 WebSocket update received:', historyData ? historyData.length + ' events' : 'empty');
-    console.log('📋 Currently loaded events:', loadedEventIds.size);
+    console.log('📨 WebSocket update received:', eventData ? 'single event' : 'empty');
     
-    // If empty, clear everything
-    if (!historyData || historyData.length === 0) {
-        console.log('🗑️ Clearing history (empty from server)');
-        historyList.innerHTML = '<li class="empty-message">No hay eventos todavía. ¡Pulsa el botón!</li>';
-        loadedEventIds.clear();
-        totalEvents = 0;
-        updateHistoryTitle();
+    // If null/empty, do nothing (history cleared is handled by API)
+    if (!eventData) {
         return;
     }
     
-    // Find new events not in our set
-    const reversedHistory = historyData.slice().reverse();
+    // Check if this event is already loaded
+    const eventId = `${eventData.timestamp}-${eventData.type}`;
     
-    console.log('🔍 Checking for new events...');
-    reversedHistory.forEach((event, idx) => {
-        const eventId = `${event.timestamp}-${event.type}`;
-        const isNew = !loadedEventIds.has(eventId);
-        if (idx < 3) { // Log first 3 for debugging
-            console.log(`  Event ${idx}: ${eventId.substring(0, 30)}... - ${isNew ? 'NEW' : 'already loaded'}`);
-        }
-    });
+    if (loadedEventIds.has(eventId)) {
+        console.log('⏭️ Event already loaded, skipping:', eventId);
+        return;
+    }
     
-    const newEvents = reversedHistory.filter(event => {
-        const eventId = `${event.timestamp}-${event.type}`;
-        return !loadedEventIds.has(eventId);
-    });
+    console.log('✅ New event detected:', eventId);
     
-    console.log('📥 Found', newEvents.length, 'new events to add');
+    // Always increment total count
+    totalEvents++;
+    updateHistoryTitle();
     
-    if (newEvents.length === 0) return;
+    // Only add to DOM if we're on the first page
+    if (currentPage !== 1) {
+        console.log('📄 Not on first page (page ' + currentPage + '), only updating counter');
+        return;
+    }
+    
+    console.log('➕ Adding event to DOM (on first page)');
     
     // Remove empty message if exists
     const emptyMessage = historyList.querySelector('.empty-message');
@@ -117,34 +112,30 @@ export function updateHistoryFromWebSocket(historyData) {
         emptyMessage.remove();
     }
     
-    // Prepend new events at the top
-    newEvents.forEach(event => {
-        const eventId = `${event.timestamp}-${event.type}`;
-        loadedEventIds.add(eventId);
-        
-        const historyItem = document.createElement('li');
-        historyItem.className = 'history-item';
-        historyItem.style.animation = 'slideIn 0.3s ease-out';
-        
-        const date = new Date(event.timestamp * 1000);
-        const timestamp = date.toLocaleString('es-ES');
-        
-        historyItem.innerHTML = `
-            <div class="event-content">
-                <div class="event-name">${event.type}</div>
-                <div class="event-details">
-                    ${event.message}<br>
-                    ${Object.keys(event.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(event.details)}<br>` : ''}
-                    <strong>Timestamp:</strong> ${timestamp}
-                </div>
-            </div>
-        `;
-        
-        historyList.insertBefore(historyItem, historyList.firstChild);
-    });
+    // Add event to loaded set
+    loadedEventIds.add(eventId);
     
-    totalEvents = historyData.length;
-    updateHistoryTitle();
+    // Create history item
+    const historyItem = document.createElement('li');
+    historyItem.className = 'history-item';
+    historyItem.style.animation = 'slideIn 0.3s ease-out';
+    
+    const date = new Date(eventData.timestamp * 1000);
+    const timestamp = date.toLocaleString('es-ES');
+    
+    historyItem.innerHTML = `
+        <div class="event-content">
+            <div class="event-name">${eventData.type}</div>
+            <div class="event-details">
+                ${eventData.message}<br>
+                ${Object.keys(eventData.details).length > 0 ? `<strong>Detalles:</strong> ${JSON.stringify(eventData.details)}<br>` : ''}
+                <strong>Timestamp:</strong> ${timestamp}
+            </div>
+        </div>
+    `;
+    
+    // Insert at the top
+    historyList.insertBefore(historyItem, historyList.firstChild);
 }
 
 function updateHistoryTitle() {

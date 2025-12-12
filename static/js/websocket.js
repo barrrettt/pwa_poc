@@ -16,10 +16,10 @@ export function connectWebSocket(onHistoryUpdate) {
         const data = JSON.parse(event.data);
         console.log('📨 WebSocket message received:', data.type);
         
-        // Backend sends history_update with full history
+        // Backend sends history_update with single event (not full array)
         if (data.type === 'history_update' && onHistoryUpdate) {
-            console.log('📜 Updating history, events count:', data.history?.length || 0);
-            onHistoryUpdate(data.history);
+            console.log('📜 New event received:', data.event ? 'single event' : 'empty');
+            onHistoryUpdate(data.event);  // Pass single event, not array
         }
     };
     
