@@ -70,14 +70,21 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
-    background-size: 400% 400%;
-    animation: gradientShift 15s ease infinite;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #4facfe 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 20px;
+}
+
+/* Desktop only: animated gradient */
+@media (min-width: 768px) {
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+    }
 }
 
 @keyframes gradientShift {
@@ -87,14 +94,21 @@ body {
 }
 
 .container {
-    background: linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 50%, rgba(240,248,255,0.9) 100%);
-    backdrop-filter: blur(20px);
+    background: linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 50%, rgba(240,248,255,0.96) 100%);
     border-radius: 20px;
     padding: 40px;
     box-shadow: 0 15px 50px rgba(0,0,0,0.2), 0 5px 15px rgba(0,0,0,0.1);
     border: 1px solid rgba(255,255,255,0.5);
     max-width: 600px;
     width: 100%;
+}
+
+/* Desktop only: backdrop blur */
+@media (min-width: 768px) {
+    .container {
+        background: linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 50%, rgba(240,248,255,0.9) 100%);
+        backdrop-filter: blur(20px);
+    }
 }
 
 h1 {
@@ -142,13 +156,19 @@ h1 {
 }
 
 .diagnostic-panel {
-    background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.1) 100%);
+    background: linear-gradient(135deg, rgba(102,126,234,0.25) 0%, rgba(118,75,162,0.2) 100%);
     border-radius: 15px;
     padding: 15px;
     margin-bottom: 25px;
     border: 2px solid rgba(102,126,234,0.3);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px rgba(102,126,234,0.1);
+    box-shadow: 0 4px 16px rgba(102,126,234,0.1);
+}
+
+@media (min-width: 768px) {
+    .diagnostic-panel {
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(102,126,234,0.1);
+    }
 }
 
 .diagnostic-title {
@@ -241,8 +261,11 @@ h1 {
     transition: left 0.5s;
 }
 
-.test-button:hover::before {
-    left: 100%;
+/* Desktop only: shine effect */
+@media (min-width: 768px) {
+    .test-button:hover::before {
+        left: 100%;
+    }
 }
 
 .test-button:hover {
@@ -267,13 +290,19 @@ h1 {
 }
 
 .activity-monitor {
-    background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.1) 100%);
+    background: linear-gradient(135deg, rgba(102,126,234,0.25) 0%, rgba(118,75,162,0.2) 100%);
     border-radius: 15px;
     padding: 15px;
     margin: 25px 0;
     border: 2px solid rgba(102,126,234,0.3);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px rgba(102,126,234,0.1);
+    box-shadow: 0 4px 16px rgba(102,126,234,0.1);
+}
+
+@media (min-width: 768px) {
+    .activity-monitor {
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(102,126,234,0.1);
+    }
 }
 
 .activity-title {
@@ -344,11 +373,17 @@ h1 {
 .history-section {
     margin-top: 30px;
     padding: 20px;
-    background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.1) 100%);
+    background: linear-gradient(135deg, rgba(102,126,234,0.25) 0%, rgba(118,75,162,0.2) 100%);
     border-radius: 15px;
     border: 2px solid rgba(102,126,234,0.3);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px rgba(102,126,234,0.1);
+    box-shadow: 0 4px 16px rgba(102,126,234,0.1);
+}
+
+@media (min-width: 768px) {
+    .history-section {
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(102,126,234,0.1);
+    }
 }
 
 .history-header {

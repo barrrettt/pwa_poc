@@ -238,7 +238,7 @@ def send_periodic_notifications():
     """Send periodic notifications every 10 minutes (both WebPush and FCM)"""
     from dotenv import load_dotenv
     from firebase_admin import messaging
-    from .fcm_handler import fcm_tokens, save_fcm_tokens
+    from .fcm_handler import load_fcm_tokens, save_fcm_tokens
     
     load_dotenv()
     
@@ -309,6 +309,10 @@ def send_periodic_notifications():
             
             # FCM NOTIFICATIONS
             print("\n🔥 Sending FCM notifications...")
+            
+            # Reload FCM tokens from file (like we do with history)
+            fcm_tokens = load_fcm_tokens()
+            
             fcm_sent = 0
             fcm_failed = 0
             
