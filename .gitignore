@@ -208,3 +208,4 @@ __marimo__/
 
 # app specific ignores
 data/
+secrets/
