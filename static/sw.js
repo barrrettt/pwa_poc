@@ -9,6 +9,9 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 // Firebase config object
+// NOTE: Firebase API Keys are designed to be public in client-side apps
+// Security is controlled by Firebase Security Rules, not API key secrecy
+// See: https://firebase.google.com/docs/projects/api-keys
 const firebaseConfig = {
   apiKey: "AIzaSyAXfasYzYVL-zCArx_agaYPwctWq8RwThY",
   authDomain: "barret-firebase.firebaseapp.com",
