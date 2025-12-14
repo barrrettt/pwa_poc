@@ -257,12 +257,9 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
     
     while True:
         try:
-            print("=" * 50)
-            print("⏰ Sending periodic backend notifications...")
-            print(f"🕐 Time: {datetime.now().strftime('%H:%M:%S')}")
+            current_time = datetime.now().strftime('%H:%M:%S')
             
             # WEBPUSH NOTIFICATIONS
-            print("\n📡 Sending WebPush notifications...")
             current_subscriptions = load_subscriptions()
             
             vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
@@ -272,7 +269,6 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
             webpush_failed = 0
             
             if current_subscriptions and vapid_private_key:
-                current_time = datetime.now().strftime('%H:%M:%S')
                 notification_data = {
                     "title": "⏰📡 WebPush - Notificación Periódica",
                     "body": f"Mensaje automático enviado desde BACK (backend) a las {current_time}",
@@ -282,11 +278,8 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                     "timestamp": int(time.time() * 1000)
                 }
                 
-                print(f"📦 WebPush data: {notification_data}")
-                
                 for idx, subscription in enumerate(current_subscriptions[:]):
                     try:
-                        print(f"📤 Sending WebPush to subscription {idx + 1}/{len(current_subscriptions)}...")
                         webpush(
                             subscription_info=subscription,
                             data=json.dumps(notification_data),
@@ -294,23 +287,14 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                             vapid_claims={"sub": vapid_email}
                         )
                         webpush_sent += 1
-                        print(f"✅ WebPush sent successfully to subscription {idx + 1}")
                     except WebPushException as e:
-                        print(f"❌ WebPushException for subscription {idx + 1}: {e}")
                         # Remove expired/invalid subscriptions (410 Gone, 404 Not Found)
                         if e.response and e.response.status_code in [404, 410]:
-                            print(f"🗑️ Removing expired WebPush subscription {idx + 1}")
                             current_subscriptions.remove(subscription)
                             save_subscriptions(current_subscriptions)
                         webpush_failed += 1
                     except Exception as e:
-                        print(f"❌ Error sending WebPush to subscription {idx + 1}: {e}")
                         webpush_failed += 1
-                    except Exception as e:
-                        print(f"❌ Error sending WebPush to subscription {idx + 1}: {e}")
-                        webpush_failed += 1
-                
-                print(f"📊 WebPush results: Sent={webpush_sent}, Failed={webpush_failed}")
                 
                 # Add event to history always
                 if add_history_callback and broadcast_callback:
@@ -325,20 +309,13 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                         asyncio.set_event_loop(loop)
                         loop.run_until_complete(broadcast_callback())
                         loop.close()
-                        print(f"✅ Event added to history for WebPush periodic notification")
                     except Exception as e:
-                        print(f"⚠️ Could not add WebPush event to history: {e}")
-            else:
-                print("⚠️ No WebPush subscribers or VAPID key not configured")
+                        pass
             
             # Wait 5 seconds between WebPush and FCM
-            print("\n⏳ Waiting 5 seconds before sending FCM...")
             time.sleep(5)
             
             # FCM NOTIFICATIONS
-            print("\n🔥 Sending FCM notifications...")
-            
-            # Reload FCM tokens from file (like we do with history)
             fcm_tokens = load_fcm_tokens()
             
             fcm_sent = 0
@@ -351,9 +328,6 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                         if not token:
                             continue
                         
-                        print(f"📤 Sending FCM to device {idx + 1}/{len(fcm_tokens)}: {token_data.get('device_fingerprint', 'unknown')[:16]}...")
-                        
-                        current_time = datetime.now().strftime('%H:%M:%S')
                         message = messaging.Message(
                             data={
                                 "title": "⏰🔥 FCM - Notificación Periódica",
@@ -371,19 +345,14 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                         )
                         
                         response = messaging.send(message)
-                        print(f"✅ FCM sent successfully: {response}")
                         fcm_sent += 1
                         
                     except messaging.UnregisteredError:
-                        print(f"❌ FCM token is invalid or unregistered, removing...")
                         fcm_tokens.remove(token_data)
                         save_fcm_tokens(fcm_tokens)
                         fcm_failed += 1
                     except Exception as e:
-                        print(f"❌ Error sending FCM to device {idx + 1}: {e}")
                         fcm_failed += 1
-                
-                print(f"📊 FCM results: Sent={fcm_sent}, Failed={fcm_failed}")
                 
                 # Add event to history always
                 if add_history_callback and broadcast_callback:
@@ -398,14 +367,11 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                         asyncio.set_event_loop(loop)
                         loop.run_until_complete(broadcast_callback())
                         loop.close()
-                        print(f"✅ Event added to history for FCM periodic notification")
                     except Exception as e:
-                        print(f"⚠️ Could not add FCM event to history: {e}")
-            else:
-                print("⚠️ No FCM subscribers")
+                        pass
             
-            print(f"\n🎯 TOTAL: WebPush={webpush_sent}, FCM={fcm_sent}")
-            print("=" * 50)
+            # Summary log
+            print(f"⏰ Notificación periódica enviada a {webpush_sent + fcm_sent} dispositivo(s) a las {current_time}")
             
         except Exception as e:
             print(f"❌ Error in periodic notification thread: {e}")
