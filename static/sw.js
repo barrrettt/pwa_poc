@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-poc-v28';
+const CACHE_NAME = 'pwa-poc-v29';
 const urlsToCache = [];
 
 // ⚠️ NO CACHING ENABLED - All requests go to network
@@ -167,11 +167,20 @@ self.addEventListener('periodicsync', event => {
 
 // Fetch event - NETWORK ONLY (no caching at all)
 self.addEventListener('fetch', event => {
+  // Don't intercept if it's not a GET request
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  
   // Always fetch from network, never use cache
   event.respondWith(
     fetch(event.request).catch(error => {
       console.error('❌ SW: Network request failed:', event.request.url, error);
-      throw error;
+      // Return a basic error response instead of throwing
+      return new Response('Network error', {
+        status: 408,
+        statusText: 'Request Timeout'
+      });
     })
   );
 });
