@@ -305,10 +305,7 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                         )
                         # Broadcast to all connected clients
                         import asyncio
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(broadcast_callback())
-                        loop.close()
+                        asyncio.run(broadcast_callback())
                     except Exception as e:
                         pass
             
@@ -363,10 +360,7 @@ def send_periodic_notifications(add_history_callback=None, broadcast_callback=No
                         )
                         # Broadcast to all connected clients
                         import asyncio
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(broadcast_callback())
-                        loop.close()
+                        asyncio.run(broadcast_callback())
                     except Exception as e:
                         pass
             

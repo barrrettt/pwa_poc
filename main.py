@@ -20,7 +20,7 @@ from datetime import datetime
 from back_modules import webpush_handler, fcm_handler
 
 # App version
-APP_VERSION = "1.0.20"
+APP_VERSION = "1.0.21"
 
 # Load environment variables
 load_dotenv()
